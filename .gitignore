@@ -3,3 +3,4 @@
 .llm_cache/
 __pycache__/
 *.egg-info/
+.pytest_cache/
