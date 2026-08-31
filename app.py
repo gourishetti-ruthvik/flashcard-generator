@@ -693,10 +693,11 @@ with gr.Blocks(title="Flashcard Generator") as demo:
 
 
 if __name__ == "__main__":
+    # server_port is passed only when PORT is set. Gradio otherwise resolves the
+    # host and port from GRADIO_SERVER_NAME / GRADIO_SERVER_PORT, which is how
+    # Hugging Face Spaces tells it to bind 0.0.0.0:7860 -- hardcoding a port here
+    # would override that.
+    port = os.environ.get("PORT")
     # pwa=True makes it installable from the phone's browser rather than just
-    # bookmarkable. PORT is honoured because hosts assign one.
-    demo.launch(
-        pwa=True,
-        css=CSS,
-        server_port=int(os.environ.get("PORT", 7860)),
-    )
+    # bookmarkable.
+    demo.launch(pwa=True, css=CSS, **({"server_port": int(port)} if port else {}))
