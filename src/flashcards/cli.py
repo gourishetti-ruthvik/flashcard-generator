@@ -55,7 +55,12 @@ def generate(
         typer.echo("requests made: 0")
         return
 
-    result = pipeline.run(source, settings, GeminiClient(settings), limit=limit)
+    result = pipeline.run(
+        pipeline.collect_chunks(source, settings),
+        settings,
+        GeminiClient(settings),
+        limit=limit,
+    )
     entries = result.cards
     duplicates = 0
 

@@ -31,13 +31,22 @@ def collect_chunks(source: Path, settings: Settings) -> list[Chunk]:
     return chunks
 
 
+def chunks_from_text(text: str, settings: Settings, name: str = "pasted") -> list[Chunk]:
+    # The web UI's input is pasted text, not a folder. A synthetic path keeps
+    # Chunk.source_path.stem meaningful, so the exporter's source tag needs no
+    # special case for this route.
+    return chunk_text(
+        loader.strip_markdown(text), Path(f"{name}.md"), settings.chunk_target_tokens
+    )
+
+
 def run(
-    source: Path,
+    chunks: list[Chunk],
     settings: Settings,
     client: GeminiClient,
     limit: int | None = None,
 ) -> Result:
-    chunks = collect_chunks(source, settings)[:limit]
+    chunks = chunks[:limit]
     result = Result(chunks=chunks)
 
     for chunk in chunks:

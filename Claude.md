@@ -18,7 +18,10 @@ using the Gemini API. CLI tool, no web UI.
 
 - `google-genai` SDK, Pydantic v2, Typer, python-dotenv, pytest
 - `sentence-transformers` for local deduplication only
-- NOT allowed: LangChain, LlamaIndex, any vector database, any web framework
+- `gradio` for the mobile front end in `app.py` only. The CLI must keep working
+  without it, and no pipeline module may import it.
+- NOT allowed: LangChain, LlamaIndex, any vector database, any other web
+  framework
 - Add no dependency without asking me first
 
 ## Code conventions

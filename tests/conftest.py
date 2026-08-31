@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
 
 from flashcards.config import Settings, load_settings
+
+# app.py sits at the repo root rather than inside the package, because Hugging
+# Face Spaces expects to find it there.
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 
 @pytest.fixture(autouse=True)

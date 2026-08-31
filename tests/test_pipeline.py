@@ -43,20 +43,20 @@ def notes(tmp_path: Path) -> Path:
 
 def test_one_request_per_chunk(notes: Path, settings: Settings) -> None:
     client = FakeClient()
-    result = pipeline.run(notes, settings, client)
+    result = pipeline.run(pipeline.collect_chunks(notes, settings), settings, client)
     assert len(result.chunks) == 2
     assert client.request_count == 2
 
 
 def test_chunks_carry_their_source_file(notes: Path, settings: Settings) -> None:
-    result = pipeline.run(notes, settings, FakeClient())
+    result = pipeline.run(pipeline.collect_chunks(notes, settings), settings, FakeClient())
     assert sorted(c.source_path.name for c in result.chunks) == ["a.md", "b.md"]
     assert sorted(c.heading for c in result.chunks) == ["Alpha", "Beta"]
 
 
 def test_limit_caps_the_number_of_chunks(notes: Path, settings: Settings) -> None:
     client = FakeClient()
-    result = pipeline.run(notes, settings, client, limit=1)
+    result = pipeline.run(pipeline.collect_chunks(notes, settings), settings, client, limit=1)
     assert len(result.chunks) == 1
     assert client.request_count == 1
 
@@ -67,7 +67,7 @@ def test_unusable_cards_are_counted_not_emitted(
     client = FakeClient(
         cards=[_card("What is X?"), _card("According to the text, what is X?")]
     )
-    result = pipeline.run(notes, settings, client)
+    result = pipeline.run(pipeline.collect_chunks(notes, settings), settings, client)
     assert len(result.cards) == 2  # one kept per chunk
     assert result.dropped == 2
 
@@ -87,7 +87,7 @@ def test_a_failing_chunk_does_not_abort_the_run(
         return original(prompt)
 
     monkeypatch.setattr(client, "generate_cards", fail_first)
-    result = pipeline.run(notes, settings, client)
+    result = pipeline.run(pipeline.collect_chunks(notes, settings), settings, client)
 
     assert len(result.failures) == 1
     assert "SAFETY" in result.failures[0]
@@ -96,18 +96,43 @@ def test_a_failing_chunk_does_not_abort_the_run(
 
 def test_prompt_carries_the_chunk_text(notes: Path, settings: Settings) -> None:
     client = FakeClient()
-    pipeline.run(notes, settings, client)
+    pipeline.run(pipeline.collect_chunks(notes, settings), settings, client)
     assert any("Alpha body text." in prompt for prompt in client.prompts)
 
 
 def test_counters_come_from_the_client(notes: Path, settings: Settings) -> None:
     client = FakeClient()
     client.cache_hits = 7
-    result = pipeline.run(notes, settings, client)
+    result = pipeline.run(pipeline.collect_chunks(notes, settings), settings, client)
     assert result.requests == client.request_count
     assert result.cache_hits == 7
 
 
 def test_source_may_be_a_single_file(notes: Path, settings: Settings) -> None:
-    result = pipeline.run(notes / "a.md", settings, FakeClient())
+    result = pipeline.run(pipeline.collect_chunks(notes / "a.md", settings), settings, FakeClient())
     assert len(result.chunks) == 1
+
+
+def test_chunks_from_text_splits_on_headings(settings: Settings) -> None:
+    chunks = pipeline.chunks_from_text(
+        "# One\n\nAlpha body.\n\n# Two\n\nBeta body.", settings
+    )
+    assert [c.heading for c in chunks] == ["One", "Two"]
+
+
+def test_chunks_from_text_strips_markdown(settings: Settings) -> None:
+    chunks = pipeline.chunks_from_text("# H\n\n**bold** and `code`", settings)
+    assert chunks[0].text == "bold and code"
+
+
+def test_chunks_from_text_names_the_source(settings: Settings) -> None:
+    # The stem feeds the exporter's source tag, so pasted input still gets one.
+    default = pipeline.chunks_from_text("# H\n\nbody", settings)
+    named = pipeline.chunks_from_text("# H\n\nbody", settings, name="lecture7")
+    assert default[0].source_path.stem == "pasted"
+    assert named[0].source_path.stem == "lecture7"
+
+
+def test_chunks_from_text_on_empty_input(settings: Settings) -> None:
+    assert pipeline.chunks_from_text("", settings) == []
+    assert pipeline.chunks_from_text("   \n\n  ", settings) == []

@@ -18,6 +18,8 @@ dependencies = [
 # torch and friends are ~26 packages / several GB, and are only needed for the
 # dedupe stage. Kept optional so a plain install stays small.
 dedupe = ["sentence-transformers>=3.0"]
+# Only the Gradio front end needs this; the CLI does not.
+app = ["gradio>=6.0"]
 dev = ["pytest>=8.0"]
 
 [project.scripts]
