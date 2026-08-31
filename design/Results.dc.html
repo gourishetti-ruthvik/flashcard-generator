@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,500&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #14151a; color: #e8e9ec;
+           font-family: 'IBM Plex Sans', system-ui, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #d99a4e; } a:hover { color: #e8b473; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+    .serif { font-family: 'Literata', Georgia, serif; }
+    .cap { font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
+           font-weight: 500; color: #6b7280; }
+    .bar { width: 3px; border-radius: 1px; }
+  </style>
+</helmet>
+
+<div style="width: 375px; min-height: 980px; background: #14151a; display: flex; flex-direction: column;">
+
+  <header style="padding: 24px 20px 18px; border-bottom: 1px solid #24272f; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+    <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.015em; color: #e8e9ec;">Cards</h1>
+    <span style="font-size: 13px; color: #9ba1ac;">Back to notes</span>
+  </header>
+
+  <section style="padding: 20px 20px 0; display: flex; flex-direction: column; gap: 7px;">
+    <p style="margin: 0; font-size: 15px; line-height: 1.4; color: #d5d9df;"><span class="mono" style="font-size: 17px; font-weight: 500; color: #e8e9ec;">3</span> cards from <span class="mono" style="color: #e8e9ec;">1</span> chunk.</p>
+    <p style="margin: 0; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11.5px; line-height: 1.6; color: #6b7280;">dropped 0 &nbsp;·&nbsp; duplicates 1 &nbsp;·&nbsp; requests 0 &nbsp;·&nbsp; cached 1</p>
+  </section>
+
+  <section style="padding: 16px 20px 0;">
+    <div style="height: 52px; border-radius: 8px; background: #d99a4e; display: flex; align-items: center; justify-content: center; gap: 9px;">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#17140f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M7 11l5 5 5-5"></path><path d="M4 20h16"></path></svg>
+      <span style="font-size: 15px; font-weight: 600; color: #17140f;">Download CSV</span>
+    </div>
+    <p style="margin: 9px 2px 0; text-align: center; font-size: 11.5px; color: #6b7280;">Import in AnkiDroid with File &rsaquo; Import</p>
+  </section>
+
+  <section style="padding: 20px 20px 24px; display: flex; flex-direction: column; gap: 11px;">
+
+    <div style="background: #1a1c22; border: 1px solid #2a2d35; border-radius: 10px; padding: 14px 15px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <span style="display: inline-flex; align-items: flex-end; gap: 2px; height: 11px;">
+            <span class="bar" style="height: 4px; background: #7fa87f;"></span>
+            <span class="bar" style="height: 7px; background: #2e323b;"></span>
+            <span class="bar" style="height: 11px; background: #2e323b;"></span>
+          </span>
+          <span style="font-size: 11.5px; font-weight: 500; color: #7fa87f;">easy</span>
+        </div>
+        <span class="mono" style="font-size: 11px; color: #6b7280;">NLP Preprocessing</span>
+      </div>
+      <p style="margin: 0; font-size: 14.5px; font-weight: 500; line-height: 1.4; color: #e8e9ec; text-wrap: pretty;">What is tokenization in Natural Language Processing?</p>
+      <p class="serif" style="margin: 0; font-size: 13px; line-height: 1.55; color: #868d97; max-height: 40px; overflow: hidden;">Tokenization is the process of breaking text into smaller units called tokens, such as words, subwords, or characters. It is a crucial…</p>
+      <div style="display: flex; align-items: center; gap: 5px; padding-top: 2px;">
+        <span style="font-size: 11.5px; color: #6b7280;">Show answer</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+    </div>
+
+    <div style="background: #1a1c22; border: 1px solid #2a2d35; border-radius: 10px; padding: 14px 15px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <span style="display: inline-flex; align-items: flex-end; gap: 2px; height: 11px;">
+            <span class="bar" style="height: 4px; background: #7fa87f;"></span>
+            <span class="bar" style="height: 7px; background: #2e323b;"></span>
+            <span class="bar" style="height: 11px; background: #2e323b;"></span>
+          </span>
+          <span style="font-size: 11.5px; font-weight: 500; color: #7fa87f;">easy</span>
+        </div>
+        <span class="mono" style="font-size: 11px; color: #6b7280;">NLP Text Preprocessing</span>
+      </div>
+      <p style="margin: 0; font-size: 14.5px; font-weight: 500; line-height: 1.4; color: #e8e9ec; text-wrap: pretty;">What are some common text preprocessing steps in Natural Language Processing besides tokenization?</p>
+      <p class="serif" style="margin: 0; font-size: 13px; line-height: 1.55; color: #868d97; max-height: 40px; overflow: hidden;">Besides tokenization, common steps include converting text to lowercase, removing punctuation, eliminating stop words, handling emojis…</p>
+      <div style="display: flex; align-items: center; gap: 5px; padding-top: 2px;">
+        <span style="font-size: 11.5px; color: #6b7280;">Show answer</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+    </div>
+
+    <div style="background: #1a1c22; border: 1px solid #2a2d35; border-radius: 10px; padding: 14px 15px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <span style="display: inline-flex; align-items: flex-end; gap: 2px; height: 11px;">
+            <span class="bar" style="height: 4px; background: #d2a24c;"></span>
+            <span class="bar" style="height: 7px; background: #d2a24c;"></span>
+            <span class="bar" style="height: 11px; background: #2e323b;"></span>
+          </span>
+          <span style="font-size: 11.5px; font-weight: 500; color: #d2a24c;">medium</span>
+        </div>
+        <span class="mono" style="font-size: 11px; color: #6b7280;">Modern NLP Tokenization</span>
+      </div>
+      <p style="margin: 0; font-size: 14.5px; font-weight: 500; line-height: 1.4; color: #e8e9ec; text-wrap: pretty;">How do modern NLP models often handle tokenization for rare or unseen words?</p>
+      <p class="serif" style="margin: 0; font-size: 13px; line-height: 1.55; color: #868d97; max-height: 40px; overflow: hidden;">Modern NLP models often use subword tokenization techniques, such as Byte Pair Encoding (BPE) or WordPiece, to handle rare or unseen…</p>
+      <div style="display: flex; align-items: center; gap: 5px; padding-top: 2px;">
+        <span style="font-size: 11.5px; color: #6b7280;">Show answer</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+    </div>
+
+  </section>
+
+</div>
+</x-dc>
+</body>
+</html>

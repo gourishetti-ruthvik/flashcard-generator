@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,500&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #14151a; color: #e8e9ec;
+           font-family: 'IBM Plex Sans', system-ui, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #d99a4e; } a:hover { color: #e8b473; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+    .cap { font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
+           font-weight: 500; color: #6b7280; }
+  </style>
+</helmet>
+
+<div style="width: 375px; min-height: 812px; background: #14151a; display: flex; flex-direction: column;">
+
+  <header style="padding: 24px 20px 18px; border-bottom: 1px solid #24272f; display: flex; flex-direction: column; gap: 5px;">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+      <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.015em; color: #e8e9ec;">Generating</h1>
+      <span class="mono" style="font-size: 12px; color: #d99a4e;">0:26</span>
+    </div>
+    <p style="margin: 0; font-size: 13px; color: #9ba1ac; line-height: 1.45;">Keep this screen open.</p>
+  </header>
+
+  <section style="padding: 22px 20px 0; display: flex; flex-direction: column; gap: 10px;">
+    <div style="display: flex; align-items: baseline; justify-content: space-between;">
+      <span class="cap">Progress</span>
+      <span class="mono" style="font-size: 11.5px; color: #9ba1ac;">step 2 of 4</span>
+    </div>
+    <div style="height: 6px; border-radius: 3px; background: #24272f; overflow: hidden; display: flex;">
+      <div style="width: 42%; background: #d99a4e; border-radius: 3px;"></div>
+    </div>
+  </section>
+
+  <section style="padding: 22px 20px 0; display: flex; flex-direction: column; gap: 2px;">
+
+    <div style="display: flex; align-items: center; gap: 13px; min-height: 56px; padding: 11px 15px; background: #1a1c22; border: 1px solid #2a2d35; border-radius: 8px 8px 0 0;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7fa87f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10" stroke="#31463a"></circle><path d="M17 9l-6.2 6L7 11.6"></path></svg>
+      <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+        <span style="font-size: 13.5px; color: #d5d9df;">Splitting notes into chunks</span>
+      </div>
+      <span class="mono" style="font-size: 11.5px; color: #7fa87f;">1 chunk</span>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 13px; min-height: 68px; padding: 11px 15px; background: #1f2229; border: 1px solid #3a3f49; border-radius: 0;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10" stroke="#3a3f49"></circle><path d="M12 2a10 10 0 0 1 8.7 5" stroke="#d99a4e"></path></svg>
+      <div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1;">
+        <span style="font-size: 13.5px; font-weight: 500; color: #e8e9ec;">Loading duplicate-detection model</span>
+        <span style="font-size: 11.5px; line-height: 1.4; color: #9ba1ac;">First run only, about 25 seconds</span>
+      </div>
+      <span class="mono" style="font-size: 11.5px; color: #d99a4e;">24s</span>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 13px; min-height: 56px; padding: 11px 15px; background: #17191e; border: 1px solid #24272f; border-top: none;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3a3f49" stroke-width="2" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle></svg>
+      <span style="font-size: 13.5px; color: #7c828c; flex-grow: 1;">Generating cards</span>
+      <span class="mono" style="font-size: 11.5px; color: #575d67;">0 / 1</span>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 13px; min-height: 56px; padding: 11px 15px; background: #17191e; border: 1px solid #24272f; border-top: none; border-radius: 0 0 8px 8px;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3a3f49" stroke-width="2" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle></svg>
+      <span style="font-size: 13.5px; color: #7c828c; flex-grow: 1;">Writing CSV</span>
+    </div>
+
+  </section>
+
+  <section style="padding: 20px 20px 0;">
+    <div style="display: flex; align-items: flex-start; gap: 9px; padding: 13px 15px; background: #1a1c22; border: 1px solid #2a2d35; border-radius: 8px;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.8" stroke-linecap="round" style="flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6l3.5 2"></path></svg>
+      <p style="margin: 0; font-size: 11.5px; line-height: 1.5; color: #7f858f;">Requests are spaced to stay under <span class="mono" style="color: #9ba1ac;">5</span> per minute. A run of 8 chunks takes about a minute of waiting alone.</p>
+    </div>
+  </section>
+
+  <div style="flex-grow: 1;"></div>
+
+  <section style="padding: 20px;">
+    <div style="height: 48px; border-radius: 8px; border: 1px solid #3a3f49; background: #1c1e25; display: flex; align-items: center; justify-content: center;">
+      <span style="font-size: 14.5px; font-weight: 500; color: #9ba1ac;">Stop</span>
+    </div>
+  </section>
+
+</div>
+</x-dc>
+</body>
+</html>

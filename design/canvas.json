@@ -1,0 +1,22 @@
+{
+  "artboards": [
+    { "file": "Empty.dc.html",        "x": 0,    "y": 0,    "w": 375, "h": 812 },
+    { "file": "Main.dc.html",         "x": 465,  "y": 0,    "w": 375, "h": 812 },
+    { "file": "Preview.dc.html",      "x": 930,  "y": 0,    "w": 375, "h": 812 },
+    { "file": "Generating.dc.html",   "x": 1395, "y": 0,    "w": 375, "h": 812 },
+    { "file": "Results.dc.html",      "x": 1860, "y": 0,    "w": 375, "h": 980 },
+    { "file": "CardExpanded.dc.html", "x": 2325, "y": 0,    "w": 375, "h": 900 },
+
+    { "file": "ErrorNoInput.dc.html", "x": 0,    "y": 1130, "w": 375, "h": 700 },
+    { "file": "ErrorNoKey.dc.html",   "x": 465,  "y": 1130, "w": 375, "h": 700 },
+    { "file": "ErrorQuota.dc.html",   "x": 930,  "y": 1130, "w": 375, "h": 812 },
+    { "file": "ErrorPartial.dc.html", "x": 1395, "y": 1130, "w": 375, "h": 900 }
+  ],
+  "annotations": [
+    { "id": "row-flow", "x": 0, "y": -130, "w": 700,
+      "text": "Happy path, left to right: empty > filled > preview estimate > generating > results > card opened." },
+    { "id": "row-errors", "x": 0, "y": 1000, "w": 700,
+      "text": "Failure and edge states. All inline, no modals. Quota is the one that actually happens." }
+  ],
+  "launch": { "view": "canvas" }
+}

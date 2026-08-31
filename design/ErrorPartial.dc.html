@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,500&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #14151a; color: #e8e9ec;
+           font-family: 'IBM Plex Sans', system-ui, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #d99a4e; } a:hover { color: #e8b473; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+    .serif { font-family: 'Literata', Georgia, serif; }
+    .cap { font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
+           font-weight: 500; color: #6b7280; }
+    .bar { width: 3px; border-radius: 1px; }
+  </style>
+</helmet>
+
+<div style="width: 375px; min-height: 900px; background: #14151a; display: flex; flex-direction: column;">
+
+  <header style="padding: 24px 20px 18px; border-bottom: 1px solid #24272f; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+    <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.015em; color: #e8e9ec;">Cards</h1>
+    <span style="font-size: 13px; color: #9ba1ac;">Back to notes</span>
+  </header>
+
+  <section style="padding: 20px 20px 0; display: flex; flex-direction: column; gap: 7px;">
+    <p style="margin: 0; font-size: 15px; line-height: 1.4; color: #d5d9df;"><span class="mono" style="font-size: 17px; font-weight: 500; color: #e8e9ec;">9</span> cards from <span class="mono" style="color: #e8e9ec;">3</span> of <span class="mono" style="color: #e8e9ec;">4</span> chunks.</p>
+    <p style="margin: 0; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11.5px; line-height: 1.6; color: #6b7280;">dropped 1 &nbsp;·&nbsp; duplicates 2 &nbsp;·&nbsp; requests 4 &nbsp;·&nbsp; cached 0</p>
+  </section>
+
+  <section style="padding: 16px 20px 0;">
+    <div style="border: 1px solid #4a3f2e; background: #211d16; border-radius: 10px; padding: 14px 15px;">
+      <div style="display: flex; align-items: flex-start; gap: 11px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d2a24c" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px;"><path d="M10.3 4.3L2.8 17a1.8 1.8 0 0 0 1.6 2.7h15.2A1.8 1.8 0 0 0 21.2 17L13.7 4.3a1.8 1.8 0 0 0-3.1 0z"></path><path d="M12 9.5v4"></path><path d="M12 17h.01"></path></svg>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <span style="font-size: 13.5px; font-weight: 600; color: #ddc189;">1 chunk failed</span>
+          <p style="margin: 0; font-size: 12.5px; line-height: 1.5; color: #a89a75;"><span class="mono" style="color: #ddc189;">lecture_04.md#2</span> stopped at MAX_TOKENS. The other three finished, and their cards are below.</p>
+        </div>
+      </div>
+      <div style="margin-top: 12px; height: 42px; border-radius: 7px; border: 1px solid #574a35; background: #2a2419; display: flex; align-items: center; justify-content: center; gap: 7px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ddc189" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"></path><path d="M20 4v4h-4"></path></svg>
+        <span style="font-size: 13px; font-weight: 500; color: #ddc189;">Retry that chunk</span>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding: 16px 20px 0;">
+    <div style="height: 52px; border-radius: 8px; background: #d99a4e; display: flex; align-items: center; justify-content: center; gap: 9px;">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#17140f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M7 11l5 5 5-5"></path><path d="M4 20h16"></path></svg>
+      <span style="font-size: 15px; font-weight: 600; color: #17140f;">Download 9 cards</span>
+    </div>
+    <p style="margin: 9px 2px 0; text-align: center; font-size: 11.5px; color: #6b7280;">The failed chunk is not included</p>
+  </section>
+
+  <section style="padding: 20px 20px 24px; display: flex; flex-direction: column; gap: 11px;">
+
+    <div style="background: #1a1c22; border: 1px solid #2a2d35; border-radius: 10px; padding: 14px 15px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <span style="display: inline-flex; align-items: flex-end; gap: 2px; height: 11px;">
+            <span class="bar" style="height: 4px; background: #7fa87f;"></span>
+            <span class="bar" style="height: 7px; background: #2e323b;"></span>
+            <span class="bar" style="height: 11px; background: #2e323b;"></span>
+          </span>
+          <span style="font-size: 11.5px; font-weight: 500; color: #7fa87f;">easy</span>
+        </div>
+        <span class="mono" style="font-size: 11px; color: #6b7280;">NLP Preprocessing</span>
+      </div>
+      <p style="margin: 0; font-size: 14.5px; font-weight: 500; line-height: 1.4; color: #e8e9ec; text-wrap: pretty;">What is tokenization in Natural Language Processing?</p>
+      <p class="serif" style="margin: 0; font-size: 13px; line-height: 1.55; color: #868d97; max-height: 40px; overflow: hidden;">Tokenization is the process of breaking text into smaller units called tokens, such as words, subwords, or characters. It is a crucial…</p>
+    </div>
+
+    <div style="background: #1a1c22; border: 1px solid #2a2d35; border-radius: 10px; padding: 14px 15px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <span style="display: inline-flex; align-items: flex-end; gap: 2px; height: 11px;">
+            <span class="bar" style="height: 4px; background: #d2a24c;"></span>
+            <span class="bar" style="height: 7px; background: #d2a24c;"></span>
+            <span class="bar" style="height: 11px; background: #2e323b;"></span>
+          </span>
+          <span style="font-size: 11.5px; font-weight: 500; color: #d2a24c;">medium</span>
+        </div>
+        <span class="mono" style="font-size: 11px; color: #6b7280;">Modern NLP Tokenization</span>
+      </div>
+      <p style="margin: 0; font-size: 14.5px; font-weight: 500; line-height: 1.4; color: #e8e9ec; text-wrap: pretty;">How do modern NLP models often handle tokenization for rare or unseen words?</p>
+      <p class="serif" style="margin: 0; font-size: 13px; line-height: 1.55; color: #868d97; max-height: 40px; overflow: hidden;">Modern NLP models often use subword tokenization techniques, such as Byte Pair Encoding (BPE) or WordPiece, to handle rare or unseen…</p>
+    </div>
+
+    <div style="background: #1a1c22; border: 1px solid #2a2d35; border-radius: 10px; padding: 14px 15px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <span style="display: inline-flex; align-items: flex-end; gap: 2px; height: 11px;">
+            <span class="bar" style="height: 4px; background: #c47f66;"></span>
+            <span class="bar" style="height: 7px; background: #c47f66;"></span>
+            <span class="bar" style="height: 11px; background: #c47f66;"></span>
+          </span>
+          <span style="font-size: 11.5px; font-weight: 500; color: #c47f66;">hard</span>
+        </div>
+        <span class="mono" style="font-size: 11px; color: #6b7280;">Embedding Trade-offs</span>
+      </div>
+      <p style="margin: 0; font-size: 14.5px; font-weight: 500; line-height: 1.4; color: #e8e9ec; text-wrap: pretty;">Why do contextual embeddings from BERT cost more to compute than static Word2Vec vectors?</p>
+      <p class="serif" style="margin: 0; font-size: 13px; line-height: 1.55; color: #868d97; max-height: 40px; overflow: hidden;">Static vectors are looked up once per word, while contextual embeddings run the whole sentence through a transformer for every…</p>
+    </div>
+
+  </section>
+
+</div>
+</x-dc>
+</body>
+</html>
