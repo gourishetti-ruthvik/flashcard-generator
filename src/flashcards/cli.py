@@ -4,27 +4,13 @@ from pathlib import Path
 
 import typer
 
-from flashcards import __version__
-from flashcards.client import GeminiClient, GeminiError
+from flashcards import __version__, pipeline
+from flashcards.client import GeminiClient
 from flashcards.config import ConfigError, load_settings
-from flashcards.models import Chunk
-from flashcards.prompts import build_generation_prompt
 
 app = typer.Typer(
     add_completion=False,
     help="Convert study notes into Anki-importable flashcards.",
-)
-
-# Phase B scaffolding: a fixed chunk so the slice can be exercised before the
-# loader and chunker exist. Replaced by real input in Phase D.
-_DEMO_TEXT = (
-    "Tokenization is the process of breaking text into smaller units called "
-    "tokens, such as words, subwords, or characters. It is one of the first and "
-    "most important preprocessing steps in Natural Language Processing because "
-    "machine learning models cannot directly understand raw text. Modern NLP "
-    "models often use subword tokenization techniques like Byte Pair Encoding "
-    "(BPE) or WordPiece, which handle rare or unseen words more effectively "
-    "than traditional word-level tokenization."
 )
 
 
@@ -41,39 +27,35 @@ def version() -> None:
 
 
 @app.command()
-def demo() -> None:
-    """Run one hardcoded chunk through one API call and print the cards."""
+def generate(
+    source: Path = typer.Argument(..., exists=True, help="Note file or directory."),
+    limit: int | None = typer.Option(None, "--limit", help="Only process N chunks."),
+) -> None:
+    """Turn a directory of notes into flashcards."""
     try:
         settings = load_settings()
     except ConfigError as exc:
         typer.secho(str(exc), fg=typer.colors.RED)
         raise typer.Exit(code=1) from exc
 
-    chunk = Chunk(
-        text=_DEMO_TEXT,
-        source_path=Path("notes/02_NLP_Tokenization_and_Text_Preprocessing.md"),
-        heading="Tokenization and Text Preprocessing",
-        index=0,
-    )
-    client = GeminiClient(settings)
+    result = pipeline.run(source, settings, GeminiClient(settings), limit=limit)
 
-    try:
-        cards = client.generate_cards(
-            build_generation_prompt(chunk, settings.cards_per_chunk)
-        )
-    except GeminiError as exc:
-        typer.secho(f"Generation failed: {exc}", fg=typer.colors.RED)
-        raise typer.Exit(code=1) from exc
-
-    for position, card in enumerate(cards, start=1):
+    for position, card in enumerate(result.cards, start=1):
         typer.secho(f"\n[{position}] {card.question}", fg=typer.colors.CYAN, bold=True)
         typer.echo(f"    {card.answer}")
         typer.echo(f"    topic={card.topic}  difficulty={card.difficulty}")
 
-    typer.echo(f"\ncards: {len(cards)}   requests: {client.request_count}")
+    for failure in result.failures:
+        typer.secho(f"chunk failed: {failure}", fg=typer.colors.RED)
+
+    typer.echo(
+        f"\nchunks: {len(result.chunks)}   cards: {len(result.cards)}   "
+        f"dropped: {result.dropped}   requests: {result.requests}   "
+        f"cached: {result.cache_hits}"
+    )
 
 
-# `generate` and `benchmark` land in later phases.
+# `--out`, `--dry-run` and `benchmark` land in later phases.
 
 if __name__ == "__main__":
     app()
