@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #14151a; color: #e8e9ec;
+           font-family: 'IBM Plex Sans', system-ui, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #d99a4e; } a:hover { color: #e8b473; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+    .sheet { width: 720px; min-height: 1120px; padding: 28px 30px 40px;
+             display: flex; flex-direction: column; gap: 26px; }
+    .cap { font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+           font-weight: 500; color: #6b7280; }
+    .err { border: 1px solid #4a352e; background: #221a17; border-radius: 10px;
+           padding: 15px 16px; display: flex; align-items: flex-start; gap: 11px; }
+    .step { display: flex; align-items: center; gap: 12px; min-height: 52px;
+            padding: 10px 15px; background: #1a1c22; border: 1px solid #2a2d35; }
+  </style>
+</helmet>
+
+<div class="sheet">
+
+  <div>
+    <span class="cap">Error states</span>
+    <p style="margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: #7f858f;">All inline, no modals. Each replaces the results column; the form on the left keeps its contents.</p>
+  </div>
+
+  <div>
+    <p style="margin: 0 0 10px; font-size: 12px; color: #575d67;">Quota exhausted — the one that actually happens</p>
+    <div class="err">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#c47f66" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5.5"></path><path d="M12 16.5h.01"></path></svg>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-size: 14.5px; font-weight: 600; color: #e6bfae;">Out of quota</span>
+          <span class="mono" style="font-size: 11px; color: #8a6455;">HTTP 429</span>
+        </div>
+        <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #b09287;">The free tier allows <span class="mono" style="color: #e6bfae;">5</span> requests per minute. Google asked to wait 47 seconds before trying again.</p>
+      </div>
+    </div>
+    <div style="margin-top: 14px;">
+      <span class="cap">What you can do</span>
+      <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 1px;">
+        <div class="step" style="border-radius: 8px 8px 0 0;"><span class="mono" style="font-size: 15px; color: #d99a4e; width: 18px;">1</span><span style="font-size: 13.5px; color: #c3c8d0;">Wait a minute, then try again</span></div>
+        <div class="step" style="border-top: none;"><span class="mono" style="font-size: 15px; color: #d99a4e; width: 18px;">2</span><span style="font-size: 13.5px; color: #c3c8d0;">Lower <span style="color: #e8e9ec;">Max chunks</span> and split the work</span></div>
+        <div class="step" style="border-top: none; border-radius: 0 0 8px 8px;"><span class="mono" style="font-size: 15px; color: #d99a4e; width: 18px;">3</span><span style="font-size: 13.5px; color: #c3c8d0;">Run again tomorrow if the daily cap is hit</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p style="margin: 0 0 10px; font-size: 12px; color: #575d67;">No API key — blocks everything</p>
+    <div class="err">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#c47f66" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px;"><path d="M15 7a4 4 0 1 1-3.5 5.9L7 17.4V21H3v-4l6.1-6.1A4 4 0 0 1 15 7z"></path><path d="M16.5 10.5h.01"></path></svg>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 14.5px; font-weight: 600; color: #e6bfae;">No API key</span>
+        <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #b09287;"><span class="mono" style="color: #e6bfae;">GEMINI_API_KEY</span> is not set, so nothing can be generated. Put it in <span class="mono" style="color: #e6bfae;">.env</span> at the project root and reload.</p>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p style="margin: 0 0 10px; font-size: 12px; color: #575d67;">No input — gentle, not alarming</p>
+    <div style="border: 1px dashed #3a3f49; background: #1a1c22; border-radius: 10px; padding: 34px 24px; text-align: center;">
+      <p style="margin: 0; font-size: 13px; color: #8d939d;">Nothing to work with</p>
+      <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">Paste notes on the left or upload a .md or .txt file, then try again.</p>
+    </div>
+  </div>
+
+  <div>
+    <p style="margin: 0 0 10px; font-size: 12px; color: #575d67;">Partial success — cards survive the failure</p>
+    <div style="border: 1px solid #4a3f2e; background: #211d16; border-radius: 10px; padding: 14px 15px; display: flex; align-items: flex-start; gap: 11px;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d2a24c" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px;"><path d="M10.3 4.3L2.8 17a1.8 1.8 0 0 0 1.6 2.7h15.2A1.8 1.8 0 0 0 21.2 17L13.7 4.3a1.8 1.8 0 0 0-3.1 0z"></path><path d="M12 9.5v4"></path><path d="M12 17h.01"></path></svg>
+      <div style="display: flex; flex-direction: column;">
+        <span style="font-size: 13.5px; font-weight: 600; color: #ddc189;">1 chunk failed</span>
+        <p style="margin: 5px 0 0; font-size: 12.5px; line-height: 1.5; color: #a89a75;"><span class="mono" style="color: #ddc189;">lecture_04#2</span> stopped at MAX_TOKENS. The other three finished, and their cards are below.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

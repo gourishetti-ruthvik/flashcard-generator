@@ -1,22 +1,24 @@
 {
   "artboards": [
-    { "file": "Empty.dc.html",        "x": 0,    "y": 0,    "w": 375, "h": 812 },
-    { "file": "Main.dc.html",         "x": 465,  "y": 0,    "w": 375, "h": 812 },
-    { "file": "Preview.dc.html",      "x": 930,  "y": 0,    "w": 375, "h": 812 },
-    { "file": "Generating.dc.html",   "x": 1395, "y": 0,    "w": 375, "h": 812 },
-    { "file": "Results.dc.html",      "x": 1860, "y": 0,    "w": 375, "h": 980 },
-    { "file": "CardExpanded.dc.html", "x": 2325, "y": 0,    "w": 375, "h": 900 },
+    { "file": "Empty.dc.html",      "x": 0,    "y": 0,    "w": 1280, "h": 860 },
+    { "file": "Main.dc.html",       "x": 1400, "y": 0,    "w": 1280, "h": 860 },
+    { "file": "Preview.dc.html",    "x": 2800, "y": 0,    "w": 1280, "h": 860 },
 
-    { "file": "ErrorNoInput.dc.html", "x": 0,    "y": 1130, "w": 375, "h": 700 },
-    { "file": "ErrorNoKey.dc.html",   "x": 465,  "y": 1130, "w": 375, "h": 700 },
-    { "file": "ErrorQuota.dc.html",   "x": 930,  "y": 1130, "w": 375, "h": 812 },
-    { "file": "ErrorPartial.dc.html", "x": 1395, "y": 1130, "w": 375, "h": 900 }
+    { "file": "Generating.dc.html", "x": 0,    "y": 1060, "w": 1280, "h": 980 },
+    { "file": "Results.dc.html",    "x": 1400, "y": 1060, "w": 1280, "h": 1080 },
+
+    { "file": "Narrow.dc.html",     "x": 2800, "y": 1060, "w": 760,  "h": 1500 },
+    { "file": "Errors.dc.html",     "x": 3680, "y": 1060, "w": 720,  "h": 1120 }
   ],
   "annotations": [
-    { "id": "row-flow", "x": 0, "y": -130, "w": 700,
-      "text": "Happy path, left to right: empty > filled > preview estimate > generating > results > card opened." },
-    { "id": "row-errors", "x": 0, "y": 1000, "w": 700,
-      "text": "Failure and edge states. All inline, no modals. Quota is the one that actually happens." }
+    { "id": "row-flow", "x": 0, "y": -150, "w": 900,
+      "text": "Desktop, 1280 wide. Left to right: empty, notes pasted, preview estimate. The form sits in a 360px sidebar; results fill the rest." },
+    { "id": "row-two", "x": 0, "y": 920, "w": 900,
+      "text": "Generating and results. Cards use an auto-fill grid, so the column count follows the window width rather than a breakpoint." },
+    { "id": "note-narrow", "x": 2800, "y": 920, "w": 760,
+      "text": "Below 900px the row collapses to a column and the sidebar stops being sticky." },
+    { "id": "note-errors", "x": 3680, "y": 920, "w": 720,
+      "text": "Error states as they appear in the results column." }
   ],
   "launch": { "view": "canvas" }
 }

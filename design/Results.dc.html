@@ -18,96 +18,88 @@
     a { color: #d99a4e; } a:hover { color: #e8b473; }
     .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
     .serif { font-family: 'Literata', Georgia, serif; }
-    .cap { font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
+    .cap { font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
            font-weight: 500; color: #6b7280; }
-    .bar { width: 3px; border-radius: 1px; }
+    .page { width: 1280px; min-height: 1080px; padding: 0 50px 40px; }
+    .hdr { padding: 24px 0 18px; border-bottom: 1px solid #24272f;
+           display: flex; align-items: baseline; justify-content: space-between; }
+    .main { display: flex; gap: 32px; align-items: flex-start; padding-top: 24px; }
+    .side { flex: 0 0 360px; display: flex; flex-direction: column; }
+    .res { flex: 1 1 0; min-width: 0; }
+    .row { display: flex; align-items: center; justify-content: space-between;
+           gap: 12px; min-height: 56px; padding: 10px 15px;
+           background: #1a1c22; border: 1px solid #2a2d35; }
+    .sub { font-size: 11.5px; color: #6b7280; }
+    .btn { border-radius: 8px; display: flex; align-items: center;
+           justify-content: center; gap: 8px; margin-top: 10px; }
+    .btn2 { height: 48px; border: 1px solid #3a3f49; background: #1c1e25;
+            color: #d5d9df; font-size: 14.5px; font-weight: 500; }
+    .btn1 { height: 52px; background: #d99a4e; color: #17140f;
+            font-size: 15px; font-weight: 600; }
   </style>
 </helmet>
 
-<div style="width: 375px; min-height: 980px; background: #14151a; display: flex; flex-direction: column;">
+<div class="page">
 
-  <header style="padding: 24px 20px 18px; border-bottom: 1px solid #24272f; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
-    <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.015em; color: #e8e9ec;">Cards</h1>
-    <span style="font-size: 13px; color: #9ba1ac;">Back to notes</span>
-  </header>
-
-  <section style="padding: 20px 20px 0; display: flex; flex-direction: column; gap: 7px;">
-    <p style="margin: 0; font-size: 15px; line-height: 1.4; color: #d5d9df;"><span class="mono" style="font-size: 17px; font-weight: 500; color: #e8e9ec;">3</span> cards from <span class="mono" style="color: #e8e9ec;">1</span> chunk.</p>
-    <p style="margin: 0; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11.5px; line-height: 1.6; color: #6b7280;">dropped 0 &nbsp;·&nbsp; duplicates 1 &nbsp;·&nbsp; requests 0 &nbsp;·&nbsp; cached 1</p>
-  </section>
-
-  <section style="padding: 16px 20px 0;">
-    <div style="height: 52px; border-radius: 8px; background: #d99a4e; display: flex; align-items: center; justify-content: center; gap: 9px;">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#17140f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M7 11l5 5 5-5"></path><path d="M4 20h16"></path></svg>
-      <span style="font-size: 15px; font-weight: 600; color: #17140f;">Download CSV</span>
+  <div class="hdr">
+    <div style="display: flex; flex-direction: column; gap: 5px;">
+      <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; color: #e8e9ec;">Flashcards</h1>
+      <p style="margin: 0; font-size: 13px; color: #9ba1ac;">Notes in, Anki cards out.</p>
     </div>
-    <p style="margin: 9px 2px 0; text-align: center; font-size: 11.5px; color: #6b7280;">Import in AnkiDroid with File &rsaquo; Import</p>
-  </section>
+    <span class="mono" style="font-size: 11px; color: #6b7280;">gemini-2.5-flash</span>
+  </div>
 
-  <section style="padding: 20px 20px 24px; display: flex; flex-direction: column; gap: 11px;">
+  <div class="main">
 
-    <div style="background: #1a1c22; border: 1px solid #2a2d35; border-radius: 10px; padding: 14px 15px; display: flex; flex-direction: column; gap: 10px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-        <div style="display: flex; align-items: center; gap: 7px;">
-          <span style="display: inline-flex; align-items: flex-end; gap: 2px; height: 11px;">
-            <span class="bar" style="height: 4px; background: #7fa87f;"></span>
-            <span class="bar" style="height: 7px; background: #2e323b;"></span>
-            <span class="bar" style="height: 11px; background: #2e323b;"></span>
-          </span>
-          <span style="font-size: 11.5px; font-weight: 500; color: #7fa87f;">easy</span>
+    <div class="side">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 9px;">
+        <span class="cap">Notes</span>
+        <span class="mono" style="font-size: 11px; color: #6b7280;">3,157 chars</span>
+      </div>
+      <div style="background: #1c1e25; border: 1px solid #2e323b; border-radius: 8px; padding: 14px 15px; height: 300px; overflow: hidden; font-size: 13.5px; line-height: 1.6; color: #c3c8d0;"># Supervised Learning (Machine Learning)<br><br>Supervised learning is one of the most fundamental concepts in machine learning. It is a learning approach where a model is trained using labeled data, meaning every input has a corresponding correct output.<br><br>Common supervised learning tasks include classification and regression. Classification predicts categories, such as identifying whether an email is spam or not…</div>
+
+      <div class="row" style="margin-top: 14px; border-radius: 8px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"></path><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"></path></svg>
+          <span style="font-size: 13.5px; color: #9ba1ac;">Upload .md or .txt</span>
         </div>
-        <span class="mono" style="font-size: 11px; color: #6b7280;">NLP Preprocessing</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
       </div>
-      <p style="margin: 0; font-size: 14.5px; font-weight: 500; line-height: 1.4; color: #e8e9ec; text-wrap: pretty;">What is tokenization in Natural Language Processing?</p>
-      <p class="serif" style="margin: 0; font-size: 13px; line-height: 1.55; color: #868d97; max-height: 40px; overflow: hidden;">Tokenization is the process of breaking text into smaller units called tokens, such as words, subwords, or characters. It is a crucial…</p>
-      <div style="display: flex; align-items: center; gap: 5px; padding-top: 2px;">
-        <span style="font-size: 11.5px; color: #6b7280;">Show answer</span>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
-      </div>
-    </div>
 
-    <div style="background: #1a1c22; border: 1px solid #2a2d35; border-radius: 10px; padding: 14px 15px; display: flex; flex-direction: column; gap: 10px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-        <div style="display: flex; align-items: center; gap: 7px;">
-          <span style="display: inline-flex; align-items: flex-end; gap: 2px; height: 11px;">
-            <span class="bar" style="height: 4px; background: #7fa87f;"></span>
-            <span class="bar" style="height: 7px; background: #2e323b;"></span>
-            <span class="bar" style="height: 11px; background: #2e323b;"></span>
-          </span>
-          <span style="font-size: 11.5px; font-weight: 500; color: #7fa87f;">easy</span>
+      <div class="row" style="margin-top: 14px; border-radius: 8px 8px 0 0;">
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 13.5px; color: #d5d9df;">Max chunks</span>
+          <span class="sub">Caps API calls</span>
         </div>
-        <span class="mono" style="font-size: 11px; color: #6b7280;">NLP Text Preprocessing</span>
-      </div>
-      <p style="margin: 0; font-size: 14.5px; font-weight: 500; line-height: 1.4; color: #e8e9ec; text-wrap: pretty;">What are some common text preprocessing steps in Natural Language Processing besides tokenization?</p>
-      <p class="serif" style="margin: 0; font-size: 13px; line-height: 1.55; color: #868d97; max-height: 40px; overflow: hidden;">Besides tokenization, common steps include converting text to lowercase, removing punctuation, eliminating stop words, handling emojis…</p>
-      <div style="display: flex; align-items: center; gap: 5px; padding-top: 2px;">
-        <span style="font-size: 11.5px; color: #6b7280;">Show answer</span>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
-      </div>
-    </div>
-
-    <div style="background: #1a1c22; border: 1px solid #2a2d35; border-radius: 10px; padding: 14px 15px; display: flex; flex-direction: column; gap: 10px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-        <div style="display: flex; align-items: center; gap: 7px;">
-          <span style="display: inline-flex; align-items: flex-end; gap: 2px; height: 11px;">
-            <span class="bar" style="height: 4px; background: #d2a24c;"></span>
-            <span class="bar" style="height: 7px; background: #d2a24c;"></span>
-            <span class="bar" style="height: 11px; background: #2e323b;"></span>
-          </span>
-          <span style="font-size: 11.5px; font-weight: 500; color: #d2a24c;">medium</span>
+        <div style="display: flex; align-items: center; background: #23262e; border: 1px solid #333740; border-radius: 7px; padding: 2px;">
+          <div style="width: 38px; height: 34px; display: flex; align-items: center; justify-content: center; color: #9ba1ac;">−</div>
+          <div class="mono" style="min-width: 32px; text-align: center; font-size: 15px; color: #e8e9ec;">5</div>
+          <div style="width: 38px; height: 34px; display: flex; align-items: center; justify-content: center; color: #9ba1ac;">+</div>
         </div>
-        <span class="mono" style="font-size: 11px; color: #6b7280;">Modern NLP Tokenization</span>
       </div>
-      <p style="margin: 0; font-size: 14.5px; font-weight: 500; line-height: 1.4; color: #e8e9ec; text-wrap: pretty;">How do modern NLP models often handle tokenization for rare or unseen words?</p>
-      <p class="serif" style="margin: 0; font-size: 13px; line-height: 1.55; color: #868d97; max-height: 40px; overflow: hidden;">Modern NLP models often use subword tokenization techniques, such as Byte Pair Encoding (BPE) or WordPiece, to handle rare or unseen…</p>
-      <div style="display: flex; align-items: center; gap: 5px; padding-top: 2px;">
-        <span style="font-size: 11.5px; color: #6b7280;">Show answer</span>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+
+      <div class="row" style="border-top: none; border-radius: 0 0 8px 8px;">
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 13.5px; color: #d5d9df;">Remove near-duplicates</span>
+          <span class="sub">Adds ~25s on first run</span>
+        </div>
+        <div style="width: 46px; height: 28px; border-radius: 14px; background: #d99a4e; display: flex; align-items: center; justify-content: flex-end; padding: 3px;">
+          <div style="width: 22px; height: 22px; border-radius: 11px; background: #14151a;"></div>
+        </div>
       </div>
+
+      <div style="padding-top: 12px; display: flex; align-items: flex-start; gap: 8px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.8" stroke-linecap="round" style="flex-shrink: 0; margin-top: 2px;"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01M11 12h1v4h1"></path></svg>
+        <p style="margin: 0; font-size: 11.5px; line-height: 1.5; color: #6b7280;">Free tier allows <span class="mono" style="color: #9ba1ac;">5</span> requests per minute. Higher values wait between calls.</p>
+      </div>
+
+      <div class="btn btn2">Preview <span class="mono" style="font-size: 11px; color: #7fa87f;">free</span></div>
+      <div class="btn btn1">Generate</div>
     </div>
 
-  </section>
+    <div class="res"><div style="display:flex;flex-direction:column;gap:7px"><p style="margin:0;font-size:15px;line-height:1.4;color:#d5d9df"><span style="font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:17px;font-weight:500;color:#e8e9ec">12</span> cards from <span style="font-family:'IBM Plex Mono',ui-monospace,monospace;color:#e8e9ec">3</span> chunks.</p><p style="margin:0;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11.5px;line-height:1.6;color:#6b7280">dropped 0 &nbsp;·&nbsp; duplicates 1 &nbsp;·&nbsp; requests 0 &nbsp;·&nbsp; cached 3</p></div><div style="height:52px;border-radius:8px;background:#d99a4e;display:flex;align-items:center;justify-content:center;gap:9px;margin-top:16px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#17140f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M7 11l5 5 5-5"></path><path d="M4 20h16"></path></svg><span style="font-size:15px;font-weight:600;color:#17140f">Download CSV</span></div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start;padding-top:20px"><div style="background:#1a1c22;border:1px solid #2a2d35;border-radius:10px;padding:14px 15px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div style="display:flex;align-items:center;gap:7px"><span style="display:inline-flex;align-items:flex-end;gap:2px;height:11px"><span style="width:3px;border-radius:1px;height:4px;background:#7fa87f"></span><span style="width:3px;border-radius:1px;height:7px;background:#2e323b"></span><span style="width:3px;border-radius:1px;height:11px;background:#2e323b"></span></span><span style="font-size:11.5px;font-weight:500;color:#7fa87f">easy</span></div><span style="font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:#6b7280">Supervised Learning Basics</span></div><p style="margin:0;font-size:14.5px;font-weight:500;line-height:1.4;color:#e8e9ec;text-wrap:pretty">What is supervised learning in machine learning?</p><div><span style="font-size:11.5px;color:#6b7280">Hide answer</span><p style="margin:10px 0 0;font-family:'Literata',Georgia,serif;font-size:14px;line-height:1.68;color:#ccd1d8;text-wrap:pretty">Supervised learning trains a model on labelled data, where every input has a corresponding correct output. The goal is to learn the relationship between input features and the target variable.</p></div></div><div style="background:#1a1c22;border:1px solid #2a2d35;border-radius:10px;padding:14px 15px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div style="display:flex;align-items:center;gap:7px"><span style="display:inline-flex;align-items:flex-end;gap:2px;height:11px"><span style="width:3px;border-radius:1px;height:4px;background:#7fa87f"></span><span style="width:3px;border-radius:1px;height:7px;background:#2e323b"></span><span style="width:3px;border-radius:1px;height:11px;background:#2e323b"></span></span><span style="font-size:11.5px;font-weight:500;color:#7fa87f">easy</span></div><span style="font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:#6b7280">Supervised Learning Tasks</span></div><p style="margin:0;font-size:14.5px;font-weight:500;line-height:1.4;color:#e8e9ec;text-wrap:pretty">What are the two main types of tasks in supervised learning?</p><div><span style="font-size:11.5px;color:#6b7280">Hide answer</span><p style="margin:10px 0 0;font-family:'Literata',Georgia,serif;font-size:14px;line-height:1.68;color:#ccd1d8;text-wrap:pretty">Classification and regression. Classification predicts categories, while regression predicts continuous values.</p></div></div><div style="background:#1a1c22;border:1px solid #2a2d35;border-radius:10px;padding:14px 15px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div style="display:flex;align-items:center;gap:7px"><span style="display:inline-flex;align-items:flex-end;gap:2px;height:11px"><span style="width:3px;border-radius:1px;height:4px;background:#d2a24c"></span><span style="width:3px;border-radius:1px;height:7px;background:#d2a24c"></span><span style="width:3px;border-radius:1px;height:11px;background:#2e323b"></span></span><span style="font-size:11.5px;font-weight:500;color:#d2a24c">medium</span></div><span style="font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:#6b7280">Supervised Learning Examples</span></div><p style="margin:0;font-size:14.5px;font-weight:500;line-height:1.4;color:#e8e9ec;text-wrap:pretty">What is an example of a classification task?</p><div><span style="font-size:11.5px;color:#6b7280">Show answer</span></div></div><div style="background:#1a1c22;border:1px solid #2a2d35;border-radius:10px;padding:14px 15px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div style="display:flex;align-items:center;gap:7px"><span style="display:inline-flex;align-items:flex-end;gap:2px;height:11px"><span style="width:3px;border-radius:1px;height:4px;background:#d2a24c"></span><span style="width:3px;border-radius:1px;height:7px;background:#d2a24c"></span><span style="width:3px;border-radius:1px;height:11px;background:#2e323b"></span></span><span style="font-size:11.5px;font-weight:500;color:#d2a24c">medium</span></div><span style="font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:#6b7280">Supervised Learning Examples</span></div><p style="margin:0;font-size:14.5px;font-weight:500;line-height:1.4;color:#e8e9ec;text-wrap:pretty">What is an example of a regression task?</p><div><span style="font-size:11.5px;color:#6b7280">Show answer</span></div></div><div style="background:#1a1c22;border:1px solid #2a2d35;border-radius:10px;padding:14px 15px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div style="display:flex;align-items:center;gap:7px"><span style="display:inline-flex;align-items:flex-end;gap:2px;height:11px"><span style="width:3px;border-radius:1px;height:4px;background:#7fa87f"></span><span style="width:3px;border-radius:1px;height:7px;background:#2e323b"></span><span style="width:3px;border-radius:1px;height:11px;background:#2e323b"></span></span><span style="font-size:11.5px;font-weight:500;color:#7fa87f">easy</span></div><span style="font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:#6b7280">NLP Preprocessing</span></div><p style="margin:0;font-size:14.5px;font-weight:500;line-height:1.4;color:#e8e9ec;text-wrap:pretty">What is tokenization in Natural Language Processing?</p><div><span style="font-size:11.5px;color:#6b7280">Show answer</span></div></div><div style="background:#1a1c22;border:1px solid #2a2d35;border-radius:10px;padding:14px 15px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div style="display:flex;align-items:center;gap:7px"><span style="display:inline-flex;align-items:flex-end;gap:2px;height:11px"><span style="width:3px;border-radius:1px;height:4px;background:#d2a24c"></span><span style="width:3px;border-radius:1px;height:7px;background:#d2a24c"></span><span style="width:3px;border-radius:1px;height:11px;background:#2e323b"></span></span><span style="font-size:11.5px;font-weight:500;color:#d2a24c">medium</span></div><span style="font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:#6b7280">Modern NLP Tokenization</span></div><p style="margin:0;font-size:14.5px;font-weight:500;line-height:1.4;color:#e8e9ec;text-wrap:pretty">How do modern NLP models handle rare or unseen words?</p><div><span style="font-size:11.5px;color:#6b7280">Show answer</span></div></div></div></div>
 
+  </div>
 </div>
 </x-dc>
 </body>
