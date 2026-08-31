@@ -6,6 +6,7 @@ the device. All real work is done by the same package the CLI uses.
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -121,14 +122,15 @@ with gr.Blocks(title="Flashcard Generator") as demo:
         "Download the CSV and import it in AnkiDroid."
     )
 
+    # Kept short, and the uploader is collapsed, so the buttons stay above the
+    # fold on a phone. A tall textbox pushed them off screen entirely.
     notes_input = gr.Textbox(
-        label="Notes", lines=10, placeholder="Paste your study notes here..."
+        label="Notes", lines=5, max_lines=12, placeholder="Paste your study notes here..."
     )
-    file_input = gr.File(
-        label="or upload .md / .txt files",
-        file_count="multiple",
-        file_types=[".md", ".txt"],
-    )
+    with gr.Accordion("or upload .md / .txt files", open=False):
+        file_input = gr.File(
+            label="Files", file_count="multiple", file_types=[".md", ".txt"]
+        )
 
     with gr.Row():
         # The free tier allows only a handful of requests per minute, so the
@@ -156,5 +158,5 @@ with gr.Blocks(title="Flashcard Generator") as demo:
 
 if __name__ == "__main__":
     # pwa=True makes it installable from the phone's browser rather than just
-    # bookmarkable.
-    demo.launch(pwa=True)
+    # bookmarkable. PORT is honoured because hosts assign one.
+    demo.launch(pwa=True, server_port=int(os.environ.get("PORT", 7860)))
