@@ -1,4 +1,4 @@
-# Hugging Face Spaces installs this file. "." picks up pyproject.toml and
+# Dependencies for running the web front end. "." picks up pyproject.toml and
 # installs the flashcards package itself.
 .
 gradio>=6.0

@@ -1,11 +1,12 @@
-"""Gradio front end. Deployed to Hugging Face Spaces, used from a phone.
+"""Gradio web front end, served in a browser.
 
-The API key lives in a Space Secret and stays server-side, so it never reaches
-the device. All real work is done by the same package the CLI uses.
+Two columns on a desktop window -- the form on the left, results on the right --
+collapsing to one column on a narrow screen. All real work is done by the same
+package the CLI uses; the key is read server-side and never reaches the browser.
 
 Everything non-interactive is rendered as inline-styled HTML rather than Gradio
-components: it is the only way to match the design exactly, and inline styles
-are immune to Gradio's own stylesheet.
+components: it is the only way to control the layout precisely, and inline
+styles are immune to Gradio's own stylesheet.
 """
 
 from __future__ import annotations
@@ -61,15 +62,41 @@ CSS = f"""
 .gradio-container, body {{
   background: {BG} !important;
   font-family: {SANS} !important;
-  max-width: 480px !important;
+  max-width: 1180px !important;
   margin: 0 auto !important;
-  padding: 0 !important;
+  padding: 0 32px 56px !important;
 }}
-.gradio-container {{ color: {TEXT} !important; }}
+/* Gradio caps its own container well below the max-width above. */
+.gradio-container {{ color: {TEXT} !important; width: 100% !important; }}
+/* The file dropzone is wider than the sidebar and pushed out a scrollbar. */
+#upload, #upload * {{ min-width: 0 !important; max-width: 100% !important; }}
+#notes textarea {{ max-height: 300px !important; }}
 footer, .show-api, .built-with {{ display: none !important; }}
 
-#col {{ gap: 0 !important; padding: 0 20px 24px !important; }}
-#col > * {{ background: transparent !important; border: none !important; }}
+/* Two columns on a desktop browser: the form stays put on the left while
+   results scroll on the right. Collapses to one column on narrow screens. */
+#main {{ gap: 32px !important; align-items: flex-start !important; }}
+/* A long paste grew the textarea until Generate sat below the fold of a sticky
+   sidebar, out of reach. The sidebar scrolls internally instead. */
+#left {{
+  flex: 0 0 360px !important;
+  position: sticky !important;
+  top: 24px !important;
+  max-height: calc(100vh - 48px) !important;
+  overflow-y: auto !important;
+}}
+/* flex-basis 0, not auto: with auto the column is sized by its content and the
+   card grid pushed it past the container instead of wrapping inside it. */
+#right {{ flex: 1 1 0 !important; min-width: 0 !important; }}
+#left > *, #right > * {{ background: transparent !important; border: none !important; }}
+#left {{ gap: 0 !important; }}
+
+@media (max-width: 900px) {{
+  .gradio-container, body {{ padding: 0 20px 40px !important; }}
+  #main {{ flex-direction: column !important; gap: 0 !important; }}
+  #left {{ position: static !important; flex: 1 1 auto !important; width: 100% !important; }}
+  #right {{ width: 100% !important; }}
+}}
 /* Gradio's loading tracker keeps its box when hidden, which left a 68px gap
    under the accordion. Progress is rendered by the app itself instead. */
 .gradio-container .wrap.hide {{ display: none !important; }}
@@ -223,7 +250,7 @@ def header_html() -> str:
         f'<div style="padding:24px 0 18px;border-bottom:1px solid #24272f;'
         f'display:flex;flex-direction:column;gap:5px;font-family:{SANS}">'
         f'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">'
-        f'<h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-0.015em;color:{TEXT}">Flashcards</h1>'
+        f'<h1 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.02em;color:{TEXT}">Flashcards</h1>'
         f'<span style="font-family:{MONO};font-size:11px;color:{TEXT_3}">gemini-2.5-flash</span></div>'
         f'<p style="margin:0;font-size:13px;color:{TEXT_2};line-height:1.45">Notes in, Anki cards out.</p></div>'
     )
@@ -403,10 +430,20 @@ def render_cards(entries: list[SourcedCard]) -> str:
             f'<p style="margin:10px 0 0;font-family:{SERIF};font-size:14px;line-height:1.68;'
             f'color:#ccd1d8;text-wrap:pretty">{_esc(card.answer)}</p></details></div>'
         )
+    # auto-fill rather than a fixed count: one column on a phone, two or three
+    # across a browser window, without a breakpoint to maintain.
     return (
-        f'<div style="font-family:{SANS};padding-top:20px;display:flex;flex-direction:column;gap:11px">'
-        f'{"".join(blocks)}</div>'
+        f'<div style="font-family:{SANS};padding-top:20px;display:grid;'
+        f"grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"
+        f'align-items:start">{"".join(blocks)}</div>'
     )
+
+
+EMPTY_RESULTS = (
+    f'<div style="font-family:{SANS};margin-top:20px;border:1px dashed {BORDER};'
+    f'border-radius:10px;padding:44px 24px;text-align:center">'
+    f'<p style="margin:0;font-size:13px;color:{TEXT_4}">Cards appear here once you generate.</p></div>'
+)
 
 
 def render_partial(failures: list[str]) -> str:
@@ -642,45 +679,49 @@ def generate(
 # --- ui --------------------------------------------------------------------
 
 with gr.Blocks(title="Flashcard Generator") as demo:
-    with gr.Column(elem_id="col"):
-        gr.HTML(header_html())
+    gr.HTML(header_html())
 
-        notes_input = gr.Textbox(
-            elem_id="notes",
-            lines=5,
-            max_lines=12,
-            placeholder="Paste lecture notes here…",
-            show_label=False,
-            container=False,
-        )
-
-        with gr.Accordion("Upload .md or .txt", open=False, elem_id="upload"):
-            file_input = gr.File(
-                file_count="multiple", file_types=[".md", ".txt"], show_label=False
+    with gr.Row(elem_id="main"):
+        with gr.Column(elem_id="left"):
+            notes_input = gr.Textbox(
+                elem_id="notes",
+                lines=10,
+                max_lines=24,
+                placeholder="Paste lecture notes here…",
+                show_label=False,
+                container=False,
             )
 
-        with gr.Column(elem_id="controls"):
-            max_chunks = gr.Number(
-                label="Max chunks",
-                value=5,
-                minimum=1,
-                precision=0,
-                elem_id="maxchunks",
+            with gr.Accordion("Upload .md or .txt", open=False, elem_id="upload"):
+                file_input = gr.File(
+                    file_count="multiple", file_types=[".md", ".txt"], show_label=False
+                )
+
+            with gr.Column(elem_id="controls"):
+                max_chunks = gr.Number(
+                    label="Max chunks",
+                    value=5,
+                    minimum=1,
+                    precision=0,
+                    elem_id="maxchunks",
+                )
+                use_dedupe = gr.Checkbox(
+                    label="Remove near-duplicates",
+                    value=True,
+                    elem_id="dedupe",
+                )
+
+            gr.HTML(hint_html(5))
+
+            preview_button = gr.Button("Preview · free", elem_id="previewbtn")
+            generate_button = gr.Button("Generate", elem_id="genbtn")
+
+        with gr.Column(elem_id="right"):
+            status = gr.HTML(EMPTY_RESULTS)
+            download = gr.DownloadButton(
+                "Download CSV", visible=False, elem_id="dlbtn"
             )
-            use_dedupe = gr.Checkbox(
-                label="Remove near-duplicates",
-                value=True,
-                elem_id="dedupe",
-            )
-
-        gr.HTML(hint_html(5))
-
-        preview_button = gr.Button("Preview · free", elem_id="previewbtn")
-        generate_button = gr.Button("Generate", elem_id="genbtn")
-
-        status = gr.HTML()
-        download = gr.DownloadButton("Download CSV", visible=False, elem_id="dlbtn")
-        cards = gr.HTML()
+            cards = gr.HTML()
 
     preview_button.click(
         preview, inputs=[notes_input, file_input, max_chunks], outputs=status
@@ -698,6 +739,4 @@ if __name__ == "__main__":
     # Hugging Face Spaces tells it to bind 0.0.0.0:7860 -- hardcoding a port here
     # would override that.
     port = os.environ.get("PORT")
-    # pwa=True makes it installable from the phone's browser rather than just
-    # bookmarkable.
-    demo.launch(pwa=True, css=CSS, **({"server_port": int(port)} if port else {}))
+    demo.launch(css=CSS, **({"server_port": int(port)} if port else {}))

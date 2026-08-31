@@ -1,18 +1,7 @@
----
-title: Flashcard Generator
-emoji: 🗂️
-colorFrom: blue
-colorTo: indigo
-sdk: gradio
-sdk_version: 6.26.0
-app_file: app.py
-pinned: false
----
-
 # Flashcard Generator
 
 Turns study notes into Anki-importable flashcards using the Gemini API.
-Runs as a CLI on the desktop and as a Gradio web app on a phone.
+Runs as a CLI, or as a website in the browser.
 
 ## Install
 
@@ -50,18 +39,28 @@ flashcards benchmark notes/
 Import the CSV with **File → Import** in Anki. The file carries
 `#separator:Comma` and `#columns:Front,Back,Tags`, so field mapping is automatic.
 
-## Web app
+## Website
 
 ```powershell
 python app.py
 ```
 
-Serves on `http://127.0.0.1:7860`. Paste notes or upload `.md`/`.txt`, press
-**Preview** for a free estimate, then **Generate**.
+Serves on `http://127.0.0.1:7860`. Two columns on a desktop window — the form on
+the left, results on the right — collapsing to one column below 900px. Paste
+notes or upload `.md`/`.txt`, press **Preview** for a free estimate, then
+**Generate**.
 
-Deployed to Hugging Face Spaces it becomes a phone app: create a Gradio Space,
-add `GEMINI_API_KEY` as a Space Secret, push, then Add to Home Screen. **Set the
-Space to private** — a public one lets anyone spend your quota.
+To reach it from another device on the same network:
+
+```powershell
+$env:GRADIO_SERVER_NAME="0.0.0.0"; python app.py
+```
+
+Then open `http://<this-machine's-lan-ip>:7860`.
+
+For a temporary public link set `GRADIO_SHARE="True"` instead — but add
+`auth=("user", "password")` to `launch()` first, because the generated URL is
+publicly guessable and anyone holding it spends your quota.
 
 ## Architecture
 
