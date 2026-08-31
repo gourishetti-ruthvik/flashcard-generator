@@ -23,5 +23,7 @@ def env_file(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def settings(env_file: Path) -> Settings:
-    return load_settings(env_file)
+def settings(env_file: Path, tmp_path: Path) -> Settings:
+    # cache_dir points into tmp_path so tests never read or write the real
+    # .llm_cache, which would make them order-dependent.
+    return load_settings(env_file, cache_dir=tmp_path / "cache")
