@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -22,3 +23,11 @@ class Chunk(BaseModel):
     source_path: Path
     heading: str
     index: int
+
+
+@dataclass(frozen=True)
+class SourcedCard:
+    # Kept beside Flashcard rather than inside it: Flashcard is the schema sent
+    # to the model, and a source field there would just invite it to invent one.
+    card: Flashcard
+    source: str
