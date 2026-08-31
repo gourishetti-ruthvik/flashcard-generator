@@ -293,3 +293,36 @@ def test_summary_sets_colour_on_every_text_span() -> None:
     summary = app.render_summary(12, 3, 0, 1, 0, 3)
     for span in summary.split("<span")[1:]:
         assert "color:" in span.split(">")[0]
+
+
+def test_card_has_both_faces() -> None:
+    entry = _sourced(_card(question="Q?", answer="A long enough answer here."))
+    rendered = app.render_cards([entry])
+    assert rendered.count("fc-face") == 2       # front and back
+    assert "fc-back" in rendered
+    assert "Q?" in rendered and "A long enough answer here." in rendered
+
+
+def test_flip_is_driven_by_a_checkbox_not_javascript() -> None:
+    # Keyboard users get the flip for free this way, and there is no script to
+    # break inside Gradio's rendering.
+    rendered = app.render_cards([_sourced(_card())])
+    assert '<input type="checkbox">' in rendered
+    assert "<script" not in rendered
+
+
+def test_answer_lives_on_the_back_face() -> None:
+    entry = _sourced(_card(question="Front side", answer="Back side text."))
+    front, back = app.render_cards([entry]).split("fc-back")
+    assert "Front side" in front and "Back side text." not in front
+    assert "Back side text." in back
+
+
+def test_entrance_is_staggered_then_capped() -> None:
+    entries = [_sourced(_card(question=f"Q{n}")) for n in range(14)]
+    rendered = app.render_cards(entries)
+    assert "animation-delay:0ms" in rendered
+    assert "animation-delay:45ms" in rendered
+    # Capped so the last card of a long run does not wait half a second.
+    assert "animation-delay:495ms" in rendered
+    assert "animation-delay:540ms" not in rendered

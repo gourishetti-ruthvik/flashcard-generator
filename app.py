@@ -219,17 +219,55 @@ footer, .show-api, .built-with {{ display: none !important; }}
 #genbtn:hover {{ background: #3a352e !important; }}
 #dlbtn:hover {{ background: #8c3327 !important; }}
 
-/* the answer reveal is a details element used purely as a CSS toggle:
-   summary content shows in both states, so the answer lives there and is
-   clamped to two lines until opened. */
-.ans summary {{ list-style: none; cursor: pointer; display: flex;
-                flex-direction: column; gap: 11px; }}
-.ans summary::-webkit-details-marker {{ display: none; }}
-.ans .txt {{ display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-             overflow: hidden; }}
-.ans[open] .txt {{ -webkit-line-clamp: unset; overflow: visible; }}
-.ans .more::before {{ content: "Reveal answer"; }}
-.ans[open] .more::before {{ content: "Hide answer"; }}
+/* Flip cards. A hidden checkbox inside the label drives a 3D rotation, so the
+   whole thing is CSS: no JavaScript, and the card stays keyboard-operable
+   because the checkbox keeps focus and space toggles it. */
+.fc {{
+  display: block;
+  height: 296px;
+  perspective: 1400px;
+  cursor: pointer;
+  transition: transform .25s ease;
+  animation: fc-in .4s cubic-bezier(.2,.8,.2,1) both;
+}}
+.fc:hover {{ transform: translateY(-3px); }}
+.fc input {{ position: absolute; opacity: 0; width: 0; height: 0; }}
+.fc-inner {{
+  position: relative; width: 100%; height: 100%;
+  transform-style: preserve-3d;
+  transition: transform .6s cubic-bezier(.2,.75,.2,1);
+}}
+.fc input:checked ~ .fc-inner {{ transform: rotateY(180deg); }}
+.fc-face {{
+  position: absolute; inset: 0;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  background: {CARD_BG};
+  border: 1px solid {RULE};
+  border-radius: 2px;
+  padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 11px;
+  overflow: hidden;
+  transition: box-shadow .25s ease;
+}}
+.fc:hover .fc-face {{ box-shadow: 0 8px 22px rgba(35,32,28,.10); }}
+.fc input:focus-visible ~ .fc-inner .fc-face {{
+  outline: 2px solid {RED}; outline-offset: 2px;
+}}
+/* The reverse of an index card is ruled. Line-height matches the rule pitch so
+   the answer sits on the lines. */
+.fc-back {{
+  transform: rotateY(180deg);
+  background-image: repeating-linear-gradient(
+    {CARD_BG} 0 27px, #ece5d8 27px 28px);
+  background-position: 0 52px;
+}}
+@keyframes fc-in {{
+  from {{ opacity: 0; transform: translateY(10px); }}
+  to {{ opacity: 1; transform: none; }}
+}}
+@media (prefers-reduced-motion: reduce) {{
+  .fc, .fc-inner, .fc-face {{ transition: none !important; animation: none !important; }}
+}}
 
 @media (max-width: 900px) {{
   .gradio-container, body {{ padding: 0 24px 40px !important; }}
@@ -423,27 +461,55 @@ def render_summary(
     )
 
 
+_FLIP_ICON = (
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 7.5 4"></path><path d="M20 3v4h-4"></path>'
+    '<path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-7.5-4"></path><path d="M4 21v-4h4"></path></svg>'
+)
+
+
+def _face_head(card, rule_colour: str, back: bool = False) -> str:
+    left = (
+        f'<span style="{LBL}">{_esc(card.topic)}</span>'
+        if back
+        else meter(card.difficulty)
+    )
+    right = (
+        f'<span style="{LBL};color:{rule_colour}">answer</span>'
+        if back
+        else f'<span style="{LBL}">{_esc(card.topic)}</span>'
+    )
+    return (
+        f'<div style="display:flex;align-items:center;justify-content:space-between;'
+        f'gap:10px;flex-shrink:0">{left}{right}</div>'
+    )
+
+
 def render_cards(entries: list[SourcedCard]) -> str:
     if not entries:
         return ""
     blocks = []
-    for entry in entries:
+    for index, entry in enumerate(entries):
         card = entry.card
         rule_colour = DIFFICULTY.get(card.difficulty, (MUTE, 0))[0]
+        edge = f"border-left:3px solid {rule_colour};"
+        # Stagger the entrance so a dozen cards arrive as a wave rather than a slab.
+        delay = f"animation-delay:{min(index, 11) * 45}ms"
         blocks.append(
-            f'<div style="background:{CARD_BG};border:1px solid {RULE};'
-            f'border-left:3px solid {rule_colour};border-radius:2px;padding:16px 18px 18px;'
-            f'display:flex;flex-direction:column;gap:12px">'
-            f'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
-            f'{meter(card.difficulty)}<span style="{LBL}">{_esc(card.topic)}</span></div>'
-            f'<p style="margin:0;font-size:18px;font-weight:500;line-height:1.32;color:{INK};'
-            f'text-wrap:pretty">{_esc(card.question)}</p>'
-            f'<div style="height:1px;background:{RULE_2}"></div>'
-            f'<details class="ans"><summary>'
-            f'<span class="txt" style="font-size:15px;line-height:1.62;color:{INK_2};'
-            f'text-wrap:pretty">{_esc(card.answer)}</span>'
-            f'<span class="more" style="{LBL};color:{RED}"></span>'
-            f"</summary></details></div>"
+            f'<label class="fc" style="{delay}"><input type="checkbox">'
+            f'<div class="fc-inner">'
+            f'<div class="fc-face" style="{edge}">'
+            f"{_face_head(card, rule_colour)}"
+            f'<p style="margin:0;font-size:18px;font-weight:500;line-height:1.36;color:{INK};'
+            f'text-wrap:pretty;flex-grow:1">{_esc(card.question)}</p>'
+            f'<div style="display:flex;align-items:center;gap:6px;color:{RED};flex-shrink:0">'
+            f'{_FLIP_ICON}<span style="{LBL};color:{RED}">flip for answer</span></div></div>'
+            f'<div class="fc-face fc-back" style="{edge}">'
+            f"{_face_head(card, rule_colour, back=True)}"
+            f'<p style="margin:0;font-size:15px;line-height:28px;color:{INK_2};'
+            f'text-wrap:pretty;flex-grow:1;overflow-y:auto">{_esc(card.answer)}</p></div>'
+            f"</div></label>"
         )
     return (
         f'<div style="font-family:{SERIF};padding-top:22px;display:grid;'
