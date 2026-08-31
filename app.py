@@ -511,6 +511,18 @@ _QUOTA_STEPS = (
 )
 
 
+def active_step(stages: list[list[str]]) -> int:
+    """1-based position of the running stage.
+
+    Derived rather than tracked by hand: a separate counter drifted out of step
+    with the stage list and reported "step 1 of 4" while stage 2 was running.
+    """
+    for index, stage in enumerate(stages):
+        if stage[0] == "active":
+            return index + 1
+    return len(stages)
+
+
 def _stages(use_dedupe: bool) -> list[list[str]]:
     stages = [
         ["pending", "Splitting notes into chunks", "", ""],
@@ -549,7 +561,7 @@ def generate(
     stages[0][3] = f"{len(chunks)} chunk{'' if len(chunks) == 1 else 's'}"
     stages[1][0] = "active"
     stages[1][3] = f"0 / {len(chunks)}"
-    yield render_stages(stages, 1, total), "", hide
+    yield render_stages(stages, active_step(stages), total), "", hide
 
     for index, chunk in enumerate(chunks, start=1):
         try:
@@ -573,14 +585,21 @@ def generate(
         outcome.dropped += result.dropped
         outcome.failures.extend(result.failures)
         stages[1][3] = f"{index} / {len(chunks)}"
-        yield render_stages(stages, 1, total), render_cards(outcome.entries), hide
+        yield (
+            render_stages(stages, active_step(stages), total),
+            render_cards(outcome.entries),
+            hide,
+        )
 
     stages[1][0] = "done"
-    step = 2
 
     if use_dedupe:
         stages[2][0] = "active"
-        yield render_stages(stages, step, total), render_cards(outcome.entries), hide
+        yield (
+            render_stages(stages, active_step(stages), total),
+            render_cards(outcome.entries),
+            hide,
+        )
         try:
             kept, dropped = dedupe.deduplicate(
                 outcome.entries, settings.similarity_threshold, settings.embedding_model
@@ -591,7 +610,6 @@ def generate(
             outcome.dedupe_note = str(exc)
             stages[2][3] = "skipped"
         stages[2][0] = "done"
-        step = 3
 
     stages[-1][0] = "done"
     outcome.csv_path = write_csv(outcome.entries)

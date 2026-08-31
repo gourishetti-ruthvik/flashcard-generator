@@ -259,3 +259,24 @@ def test_generate_on_empty_input_is_friendly() -> None:
     assert "Nothing to work with" in status
     assert cards_html == ""
     assert download["visible"] is False
+
+
+def test_step_counter_tracks_the_active_stage() -> None:
+    # A hand-maintained counter drifted and reported "step 1 of 4" while stage 2
+    # was running, so the number is derived from the stage list instead.
+    stages = [
+        ["done", "a", "", ""],
+        ["active", "b", "", ""],
+        ["pending", "c", "", ""],
+    ]
+    assert app.active_step(stages) == 2
+    stages[1][0], stages[2][0] = "done", "active"
+    assert app.active_step(stages) == 3
+    stages[2][0] = "done"
+    assert app.active_step(stages) == 3  # all done: report the last stage
+
+
+def test_generating_frame_reports_step_two_of_four() -> None:
+    frames = [f[0] for f in app.generate(NOTES, None, 5, True)]
+    generating = next(f for f in frames if "Generating cards" in f and "step" in f)
+    assert "step 2 of 4" in generating
