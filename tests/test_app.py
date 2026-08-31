@@ -87,10 +87,9 @@ def test_blank_input_yields_nothing(settings: Settings) -> None:
     [("easy", 1), ("medium", 2), ("hard", 3)],
 )
 def test_meter_fills_one_bar_per_level(difficulty: str, filled: int) -> None:
-    # The bar count carries the level, so it survives greyscale printing and
-    # colour blindness. Colour only reinforces it.
-    colour = app.DIFFICULTY[difficulty][0]
-    assert app.meter(difficulty).count(f"background:{colour}") == filled
+    # The filled-square count carries the level, so it survives greyscale and
+    # colour blindness. The card's margin rule is what carries the colour.
+    assert app.meter(difficulty).count(f"background:{app.INK}") == filled
 
 
 def test_meter_labels_the_level() -> None:
@@ -111,9 +110,15 @@ def test_render_cards_is_empty_for_no_cards() -> None:
 
 def test_summary_matches_the_cli_wording() -> None:
     summary = app.render_summary(3, 1, 0, 1, 0, 1)
-    assert "cards from" in summary
+    assert "3 cards" in summary
+    assert "from 1 chunk<" in summary  # singular for one chunk
     assert "dropped 0" in summary and "duplicates 1" in summary
-    assert "chunk." in summary  # singular for one chunk
+
+
+def test_card_margin_rule_carries_the_difficulty_colour() -> None:
+    # Colour lives on the card edge, not in the meter.
+    entry = _sourced(_card(difficulty="hard"))
+    assert f"border-left:3px solid {app.DIFFICULTY['hard'][0]}" in app.render_cards([entry])
 
 
 def test_estimate_reports_counts_and_reassurance() -> None:
@@ -150,7 +155,7 @@ def test_generate_returns_cards_summary_and_csv() -> None:
     status, cards_html, download = last(app.generate(NOTES, None, 5, False))
 
     assert "What is tokenization?" in cards_html
-    assert "cards from" in status
+    assert "1 cards" in status and "from 1 chunk" in status
     assert download["visible"] is True
     assert Path(download["value"]).exists()
 
@@ -249,7 +254,7 @@ def test_missing_secret_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
     status, cards_html, download = last(app.generate(NOTES, None, 5, False))
 
     assert "No API key" in status
-    assert "Space secret" in status
+    assert ".env" in status
     assert cards_html == ""
     assert download["visible"] is False
 
@@ -280,3 +285,11 @@ def test_generating_frame_reports_step_two_of_four() -> None:
     frames = [f[0] for f in app.generate(NOTES, None, 5, True)]
     generating = next(f for f in frames if "Generating cards" in f and "step" in f)
     assert "step 2 of 4" in generating
+
+
+def test_summary_sets_colour_on_every_text_span() -> None:
+    # Gradio ships a dark theme; any span of ours without an explicit colour
+    # inherits near-white and vanishes on the paper ground.
+    summary = app.render_summary(12, 3, 0, 1, 0, 3)
+    for span in summary.split("<span")[1:]:
+        assert "color:" in span.split(">")[0]

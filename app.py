@@ -1,12 +1,14 @@
 """Gradio web front end, served in a browser.
 
-Two columns on a desktop window -- the form on the left, results on the right --
-collapsing to one column on a narrow screen. All real work is done by the same
-package the CLI uses; the key is read server-side and never reaches the browser.
+Ruled Paper: warm paper ground, Newsreader serif, cards drawn as index cards
+with a coloured margin rule. Two columns on a desktop window -- the form on the
+left, results on the right -- collapsing to one column below 900px.
 
-Everything non-interactive is rendered as inline-styled HTML rather than Gradio
-components: it is the only way to control the layout precisely, and inline
-styles are immune to Gradio's own stylesheet.
+All real work is done by the same package the CLI uses; the key is read
+server-side and never reaches the browser. Everything non-interactive is
+rendered as inline-styled HTML rather than Gradio components: it is the only way
+to control the layout precisely, and inline styles are immune to Gradio's own
+stylesheet.
 """
 
 from __future__ import annotations
@@ -28,124 +30,112 @@ from flashcards.models import Chunk, SourcedCard
 
 # --- design tokens ---------------------------------------------------------
 
-BG = "#14151a"
-SURFACE = "#1a1c22"
-SURFACE_2 = "#1c1e25"
-SURFACE_3 = "#23262e"
-BORDER = "#2a2d35"
-BORDER_STRONG = "#3a3f49"
-TEXT = "#e8e9ec"
-TEXT_2 = "#9ba1ac"
-TEXT_3 = "#6b7280"
-TEXT_4 = "#575d67"
-ACCENT = "#d99a4e"
+PAPER = "#faf7f2"
+CARD_BG = "#fffdfa"
+INK = "#23201c"
+INK_2 = "#4a443b"
+INK_3 = "#6d6559"
+RULE = "#d9d2c6"
+RULE_2 = "#e6e0d5"
+MUTE = "#8c8578"
+FAINT = "#a49c8f"
+RED = "#a63d2f"
+AMBER = "#c98a2e"
+OX = "#8c3b2a"
+GREEN = "#4f7a48"
 
-DIFFICULTY = {
-    "easy": ("#7fa87f", 1),
-    "medium": ("#d2a24c", 2),
-    "hard": ("#c47f66", 3),
-}
+# level -> (margin-rule colour, filled squares)
+DIFFICULTY = {"easy": (RED, 1), "medium": (AMBER, 2), "hard": (OX, 3)}
 
-SANS = "'IBM Plex Sans', system-ui, sans-serif"
-SERIF = "'Literata', Georgia, serif"
+SERIF = "'Newsreader', Georgia, serif"
 MONO = "'IBM Plex Mono', ui-monospace, monospace"
 
 FONTS = (
     "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500"
-    "&family=IBM+Plex+Sans:wght@400;500;600"
-    "&family=Literata:opsz,wght@7..72,400;7..72,500&display=swap"
+    "&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap"
 )
 
 CSS = f"""
 @import url('{FONTS}');
 
-.gradio-container, body {{
-  background: {BG} !important;
-  font-family: {SANS} !important;
+body {{
+  background: {PAPER} !important;
+  font-family: {SERIF} !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}}
+/* Padding lives on the container only. Setting it on body as well subtracted
+   112px twice and the page came out 1068 wide instead of 1180. */
+.gradio-container {{
+  background: {PAPER} !important;
+  font-family: {SERIF} !important;
+  color: {INK} !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
   max-width: 1180px !important;
   margin: 0 auto !important;
-  padding: 0 32px 56px !important;
+  padding: 0 56px 56px !important;
 }}
-/* Gradio caps its own container well below the max-width above. */
-.gradio-container {{ color: {TEXT} !important; width: 100% !important; }}
-/* The file dropzone is wider than the sidebar and pushed out a scrollbar. */
-#upload, #upload * {{ min-width: 0 !important; max-width: 100% !important; }}
-#notes textarea {{ max-height: 300px !important; }}
+#upload {{ overflow: hidden !important; }}
 footer, .show-api, .built-with {{ display: none !important; }}
+.gradio-container .wrap.hide {{ display: none !important; }}
 
-/* Two columns on a desktop browser: the form stays put on the left while
-   results scroll on the right. Collapses to one column on narrow screens. */
-#main {{ gap: 32px !important; align-items: flex-start !important; }}
-/* A long paste grew the textarea until Generate sat below the fold of a sticky
-   sidebar, out of reach. The sidebar scrolls internally instead. */
+/* Gradio 6 ships a dark zinc theme on its own wrappers, which showed through
+   the paper ground as grey boxes round every control. */
+#left .block, #left .form, #right .block, #right .form,
+#maxchunks, #dedupe {{
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}}
+
+#main {{ gap: 44px !important; align-items: flex-start !important; }}
 #left {{
-  flex: 0 0 360px !important;
+  flex: 0 0 320px !important;
   position: sticky !important;
   top: 24px !important;
   max-height: calc(100vh - 48px) !important;
   overflow-y: auto !important;
 }}
-/* flex-basis 0, not auto: with auto the column is sized by its content and the
-   card grid pushed it past the container instead of wrapping inside it. */
 #right {{ flex: 1 1 0 !important; min-width: 0 !important; }}
 #left > *, #right > * {{ background: transparent !important; border: none !important; }}
 #left {{ gap: 0 !important; }}
 
-@media (max-width: 900px) {{
-  .gradio-container, body {{ padding: 0 20px 40px !important; }}
-  #main {{ flex-direction: column !important; gap: 0 !important; }}
-  #left {{ position: static !important; flex: 1 1 auto !important; width: 100% !important; }}
-  #right {{ width: 100% !important; }}
-}}
-/* Gradio's loading tracker keeps its box when hidden, which left a 68px gap
-   under the accordion. Progress is rendered by the app itself instead. */
-.gradio-container .wrap.hide {{ display: none !important; }}
-
-/* notes textarea */
+/* notes */
 #notes textarea {{
-  background: {SURFACE_2} !important;
-  border: 1px solid #2e323b !important;
-  border-radius: 8px !important;
-  color: #c3c8d0 !important;
-  font-family: {SANS} !important;
-  font-size: 13.5px !important;
-  line-height: 1.6 !important;
-  padding: 14px 15px !important;
+  background: {CARD_BG} !important;
+  border: 1px solid {RULE} !important;
+  border-radius: 2px !important;
+  color: {INK_2} !important;
+  font-family: {SERIF} !important;
+  font-size: 14px !important;
+  line-height: 1.62 !important;
+  padding: 14px 16px !important;
+  max-height: 260px !important;
   box-shadow: none !important;
 }}
-#notes textarea::placeholder {{ color: {TEXT_4} !important; }}
-#notes textarea:focus {{ border-color: {BORDER_STRONG} !important; outline: none !important; }}
-/* Gradio nests the textarea inside the label, so only the label's text is
-   hidden here. Hiding the label itself takes the input down with it. */
+#notes textarea::placeholder {{ color: {FAINT} !important; }}
+#notes textarea:focus {{ border-color: {INK_3} !important; outline: none !important; }}
 #notes label > span {{ display: none !important; }}
 
-/* upload accordion */
+/* upload */
 #upload {{
-  background: {SURFACE} !important;
-  border: 1px solid {BORDER} !important;
-  border-radius: 8px !important;
+  background: {CARD_BG} !important;
+  border: 1px solid {RULE} !important;
+  border-radius: 2px !important;
   margin-top: 14px !important;
 }}
 #upload button, #upload .label-wrap {{
-  color: {TEXT_2} !important;
-  font-family: {SANS} !important;
-  font-size: 13.5px !important;
+  color: {INK_3} !important;
+  font-family: {SERIF} !important;
+  font-size: 14px !important;
   font-weight: 400 !important;
-  min-height: 48px !important;
+  min-height: 46px !important;
 }}
+#upload, #upload * {{ min-width: 0 !important; max-width: 100% !important; }}
 
-/* control rows */
-#controls {{ margin-top: 14px !important; gap: 0 !important; }}
-#maxchunks, #dedupe {{
-  background: {SURFACE} !important;
-  border: 1px solid {BORDER} !important;
-  padding: 10px 15px !important;
-  min-height: 56px !important;
-  display: flex !important;
-  align-items: center !important;
-}}
-#maxchunks {{ border-radius: 8px 8px 0 0 !important; }}
-#dedupe {{ border-radius: 0 0 8px 8px !important; border-top: none !important; }}
+/* controls */
+#controls {{ margin-top: 18px !important; gap: 10px !important; }}
 #maxchunks label, #dedupe label {{
   display: flex !important;
   align-items: center !important;
@@ -154,32 +144,33 @@ footer, .show-api, .built-with {{ display: none !important; }}
   width: 100% !important;
   margin: 0 !important;
 }}
-/* Gradio puts the checkbox before its text; the design wants the label on the
-   left and the switch on the right. */
 #dedupe label {{ flex-direction: row-reverse !important; }}
 #maxchunks label span, #dedupe label span {{
-  color: #d5d9df !important; font-size: 13.5px !important; font-weight: 400 !important;
+  color: {INK} !important;
+  font-family: {SERIF} !important;
+  font-size: 14.5px !important;
+  font-weight: 400 !important;
   margin: 0 !important;
 }}
 #maxchunks input {{
-  background: {SURFACE_3} !important;
-  border: 1px solid #333740 !important;
-  border-radius: 7px !important;
-  color: {TEXT} !important;
+  background: {CARD_BG} !important;
+  border: 1px solid {RULE} !important;
+  border-radius: 2px !important;
+  color: {INK} !important;
   font-family: {MONO} !important;
   font-size: 15px !important;
-  height: 40px !important;
-  width: 96px !important;
-  flex: 0 0 96px !important;
+  height: 38px !important;
+  width: 74px !important;
+  flex: 0 0 74px !important;
   text-align: center !important;
   padding: 0 !important;
 }}
 #dedupe input[type="checkbox"] {{
   appearance: none !important; -webkit-appearance: none !important;
-  width: 46px !important; height: 28px !important;
-  flex: 0 0 46px !important;
-  border-radius: 14px !important;
-  background: {BORDER} !important;
+  width: 42px !important; height: 24px !important;
+  flex: 0 0 42px !important;
+  border-radius: 12px !important;
+  background: {RULE} !important;
   border: none !important;
   position: relative !important;
   cursor: pointer !important;
@@ -187,37 +178,72 @@ footer, .show-api, .built-with {{ display: none !important; }}
 }}
 #dedupe input[type="checkbox"]::after {{
   content: ""; position: absolute; top: 3px; left: 3px;
-  width: 22px; height: 22px; border-radius: 11px; background: {BG};
+  width: 18px; height: 18px; border-radius: 9px; background: {CARD_BG};
   transition: transform .15s ease;
 }}
-#dedupe input[type="checkbox"]:checked {{ background: {ACCENT} !important; }}
+#dedupe input[type="checkbox"]:checked {{ background: {RED} !important; }}
 #dedupe input[type="checkbox"]:checked::after {{ transform: translateX(18px); }}
 
 /* buttons */
 #previewbtn, #genbtn, #dlbtn {{
-  font-family: {SANS} !important;
-  border-radius: 8px !important;
+  font-family: {SERIF} !important;
+  border-radius: 2px !important;
   box-shadow: none !important;
-  margin-top: 10px !important;
+  margin-top: 9px !important;
 }}
 #previewbtn {{
-  background: {SURFACE_2} !important;
-  border: 1px solid {BORDER_STRONG} !important;
-  color: #d5d9df !important;
+  background: transparent !important;
+  border: 1px solid {INK} !important;
+  color: {INK} !important;
+  min-height: 44px !important;
+  font-size: 15px !important;
+  font-weight: 400 !important;
+}}
+#genbtn {{
+  background: {INK} !important;
+  border: none !important;
+  color: {PAPER} !important;
   min-height: 48px !important;
-  font-size: 14.5px !important;
+  font-size: 15px !important;
   font-weight: 500 !important;
 }}
-#genbtn, #dlbtn {{
-  background: {ACCENT} !important;
+#dlbtn {{
+  background: {RED} !important;
   border: none !important;
-  color: #17140f !important;
-  min-height: 52px !important;
-  font-size: 15px !important;
-  font-weight: 600 !important;
+  color: {CARD_BG} !important;
+  min-height: 44px !important;
+  font-family: {MONO} !important;
+  font-size: 13px !important;
+  letter-spacing: .04em !important;
 }}
-#genbtn:hover, #dlbtn:hover {{ background: #e8b473 !important; }}
+#genbtn:hover {{ background: #3a352e !important; }}
+#dlbtn:hover {{ background: #8c3327 !important; }}
+
+/* the answer reveal is a details element used purely as a CSS toggle:
+   summary content shows in both states, so the answer lives there and is
+   clamped to two lines until opened. */
+.ans summary {{ list-style: none; cursor: pointer; display: flex;
+                flex-direction: column; gap: 11px; }}
+.ans summary::-webkit-details-marker {{ display: none; }}
+.ans .txt {{ display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+             overflow: hidden; }}
+.ans[open] .txt {{ -webkit-line-clamp: unset; overflow: visible; }}
+.ans .more::before {{ content: "Reveal answer"; }}
+.ans[open] .more::before {{ content: "Hide answer"; }}
+
+@media (max-width: 900px) {{
+  .gradio-container, body {{ padding: 0 24px 40px !important; }}
+  #main {{ flex-direction: column !important; gap: 0 !important; }}
+  #left {{ position: static !important; flex: 1 1 auto !important; width: 100% !important;
+           max-height: none !important; overflow-y: visible !important; }}
+  #right {{ width: 100% !important; padding-top: 30px !important; }}
+}}
 """
+
+LBL = (
+    f"font-family:{MONO};font-size:10.5px;letter-spacing:.12em;"
+    f"text-transform:uppercase;color:{MUTE}"
+)
 
 
 # --- rendering helpers -----------------------------------------------------
@@ -228,171 +254,154 @@ def _esc(text: str) -> str:
 
 
 def meter(difficulty: str) -> str:
-    """Three ascending bars, filled by level.
+    """Filled and hollow squares, plus the word.
 
-    The count carries the meaning; colour only reinforces it, so the level
-    survives greyscale and colour blindness.
+    The count carries the level, so it survives greyscale and colour blindness.
+    The card's margin rule is what carries the colour.
     """
-    colour, filled = DIFFICULTY.get(difficulty, (TEXT_3, 0))
-    bars = "".join(
-        f'<span style="width:3px;border-radius:1px;height:{h}px;'
-        f'background:{colour if i < filled else "#2e323b"}"></span>'
-        for i, h in enumerate((4, 7, 11))
+    filled = DIFFICULTY.get(difficulty, (MUTE, 0))[1]
+    squares = "".join(
+        f'<span style="width:7px;height:7px;background:{INK}"></span>'
+        if index < filled
+        else '<span style="width:7px;height:7px;border:1px solid #b9b1a3"></span>'
+        for index in range(3)
     )
     return (
-        f'<span style="display:inline-flex;align-items:flex-end;gap:2px;height:11px">{bars}</span>'
-        f'<span style="font-size:11.5px;font-weight:500;color:{colour}">{_esc(difficulty)}</span>'
+        f'<div style="display:flex;align-items:center;gap:8px">'
+        f'<span style="display:inline-flex;gap:3px">{squares}</span>'
+        f'<span style="{LBL};color:{INK}">{_esc(difficulty)}</span></div>'
     )
 
 
 def header_html() -> str:
     return (
-        f'<div style="padding:24px 0 18px;border-bottom:1px solid #24272f;'
-        f'display:flex;flex-direction:column;gap:5px;font-family:{SANS}">'
-        f'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">'
-        f'<h1 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.02em;color:{TEXT}">Flashcards</h1>'
-        f'<span style="font-family:{MONO};font-size:11px;color:{TEXT_3}">gemini-2.5-flash</span></div>'
-        f'<p style="margin:0;font-size:13px;color:{TEXT_2};line-height:1.45">Notes in, Anki cards out.</p></div>'
+        f'<div style="display:flex;align-items:flex-end;justify-content:space-between;'
+        f'padding:34px 0 20px;border-bottom:2px solid {INK};font-family:{SERIF}">'
+        f'<div style="display:flex;align-items:baseline;gap:14px">'
+        f'<h1 style="margin:0;font-size:34px;font-weight:600;letter-spacing:-0.02em;'
+        f'color:{INK}">Flashcards</h1>'
+        f'<span style="font-size:16px;color:{INK_3}">notes in, Anki cards out</span></div>'
+        f'<span style="font-family:{MONO};font-size:11px;color:{MUTE}">gemini-2.5-flash</span></div>'
     )
 
 
 def hint_html(rpm: int) -> str:
     return (
-        f'<div style="padding:12px 0 0;display:flex;align-items:flex-start;gap:8px;font-family:{SANS}">'
-        f'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="{TEXT_3}" stroke-width="1.8" '
-        f'stroke-linecap="round" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="9"></circle>'
-        f'<path d="M12 8h.01M11 12h1v4h1"></path></svg>'
-        f'<p style="margin:0;font-size:11.5px;line-height:1.5;color:{TEXT_3}">Free tier allows '
-        f'<span style="font-family:{MONO};color:{TEXT_2}">{rpm}</span> requests per minute. '
-        f"Higher values wait between calls.</p></div>"
+        f'<p style="margin:12px 0 0;font-family:{SERIF};font-size:12.5px;line-height:1.5;'
+        f'color:{MUTE}">Free tier allows <span style="font-family:{MONO};color:{INK_3}">{rpm}</span> '
+        f"requests a minute. Higher values wait between calls.</p>"
     )
 
 
 def render_estimate(chunks: int, tokens: int, rpm: int) -> str:
     waiting = max(0, (chunks - rpm) * 12)
     cells = "".join(
-        f'<div style="display:flex;flex-direction:column;gap:3px">'
-        f'<span style="font-family:{MONO};font-size:26px;font-weight:500;line-height:1;color:{TEXT}">{value}</span>'
-        f'<span style="font-size:11.5px;color:#7f858f">{label}</span></div>'
+        f'<div style="display:flex;flex-direction:column;gap:4px">'
+        f'<span style="font-size:38px;font-weight:600;line-height:1;letter-spacing:-0.02em;'
+        f'color:{INK}">{value}</span><span style="{LBL}">{label}</span></div>'
         for value, label in (
             (chunks, "chunk" if chunks == 1 else "chunks"),
             (chunks, "request" if chunks == 1 else "requests"),
             (tokens, "tokens approx"),
         )
     )
-    wait_line = (
-        f" About {waiting}s of that is waiting on the rate limit." if waiting else ""
-    )
+    wait_line = f" About {waiting}s of that is waiting on the rate limit." if waiting else ""
     return (
-        f'<div style="font-family:{SANS};padding-top:20px">'
-        f'<div style="border:1px solid #33383f;background:#1b1e24;border-radius:10px;overflow:hidden">'
-        f'<div style="padding:13px 16px 0"><span style="font-size:11px;letter-spacing:0.09em;'
-        f'text-transform:uppercase;font-weight:500;color:#7f858f">Estimate</span></div>'
-        f'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:12px 16px 16px">{cells}</div>'
-        f'<div style="display:flex;align-items:center;gap:9px;padding:12px 16px;background:#1e241f;'
-        f'border-top:1px solid #2b3430"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" '
-        f'stroke="#7fa87f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" '
-        f'style="flex-shrink:0"><path d="M20 6L9 17l-5-5"></path></svg>'
-        f'<span style="font-size:12.5px;line-height:1.45;color:#a8c0a8">No API calls were made.</span></div></div>'
-        f'<p style="margin:10px 2px 0;font-size:11.5px;line-height:1.5;color:{TEXT_3}">'
-        f"Token count is estimated locally at 4 characters per token, not measured by the API.{wait_line}</p></div>"
+        f'<div style="font-family:{SERIF}">'
+        f'<div style="border:1px solid {RULE};background:{CARD_BG};border-radius:2px;overflow:hidden">'
+        f'<div style="padding:16px 20px 0"><span style="{LBL}">Estimate</span></div>'
+        f'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;'
+        f'padding:14px 20px 20px">{cells}</div>'
+        f'<div style="display:flex;align-items:center;gap:10px;padding:14px 20px;'
+        f'background:#f2f5ee;border-top:1px solid #dfe5d8">'
+        f'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{GREEN}" '
+        f'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+        f'<path d="M20 6L9 17l-5-5"></path></svg>'
+        f'<span style="font-size:14px;color:#3f5c3a">No API calls were made.</span></div></div>'
+        f'<p style="margin:12px 2px 0;font-size:13px;line-height:1.55;color:{MUTE}">'
+        f"Token count is estimated locally at four characters per token, not measured "
+        f"by the API.{wait_line}</p></div>"
     )
 
 
 def render_error(title: str, code: str, detail: str, steps: tuple[str, ...] = ()) -> str:
     code_html = (
-        f'<span style="font-family:{MONO};font-size:11px;color:#8a6455">{_esc(code)}</span>'
+        f'<span style="font-family:{MONO};font-size:11px;color:{MUTE}">{_esc(code)}</span>'
         if code
         else ""
     )
     rows = ""
     if steps:
-        items = []
-        for index, step in enumerate(steps, 1):
-            radius = (
-                "8px 8px 0 0"
-                if index == 1
-                else ("0 0 8px 8px" if index == len(steps) else "0")
-            )
-            top = "none" if index > 1 else f"1px solid {BORDER}"
-            items.append(
-                f'<div style="display:flex;align-items:center;gap:12px;min-height:56px;padding:11px 15px;'
-                f'background:{SURFACE};border:1px solid {BORDER};border-top:{top};border-radius:{radius}">'
-                f'<span style="font-family:{MONO};font-size:15px;color:{ACCENT};width:18px">{index}</span>'
-                f'<span style="font-size:13.5px;line-height:1.45;color:#c3c8d0">{step}</span></div>'
-            )
+        items = "".join(
+            f'<div style="display:flex;align-items:center;gap:14px;min-height:52px;'
+            f'padding:10px 4px;border-bottom:1px solid {RULE_2}">'
+            f'<span style="font-family:{MONO};font-size:14px;color:{RED};width:16px">{index}</span>'
+            f'<span style="font-size:14.5px;color:{INK_2}">{step}</span></div>'
+            for index, step in enumerate(steps, 1)
+        )
         rows = (
-            f'<div style="padding-top:18px"><span style="font-size:11px;letter-spacing:0.09em;'
-            f'text-transform:uppercase;font-weight:500;color:{TEXT_3}">What you can do</span>'
-            f'<div style="margin-top:11px;display:flex;flex-direction:column;gap:1px">{"".join(items)}</div></div>'
+            f'<div style="padding-top:20px"><span style="{LBL}">What you can do</span>'
+            f'<div style="padding-top:6px">{items}</div></div>'
         )
     return (
-        f'<div style="font-family:{SANS};padding-top:20px">'
-        f'<div style="border:1px solid #4a352e;background:#221a17;border-radius:10px;padding:15px 16px">'
-        f'<div style="display:flex;align-items:flex-start;gap:11px">'
-        f'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#c47f66" stroke-width="1.9" '
-        f'stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px">'
-        f'<circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5.5"></path><path d="M12 16.5h.01"></path></svg>'
-        f'<div style="display:flex;flex-direction:column;gap:6px">'
-        f'<div style="display:flex;align-items:baseline;gap:8px">'
-        f'<span style="font-size:14.5px;font-weight:600;color:#e6bfae">{_esc(title)}</span>{code_html}</div>'
-        f'<p style="margin:0;font-size:13px;line-height:1.55;color:#b09287">{detail}</p>'
-        f"</div></div></div>{rows}</div>"
+        f'<div style="font-family:{SERIF}">'
+        f'<div style="border:1px solid {RULE};border-left:3px solid {RED};background:#fbf1ee;'
+        f'border-radius:2px;padding:16px 20px;display:flex;flex-direction:column;gap:7px">'
+        f'<div style="display:flex;align-items:baseline;gap:10px">'
+        f'<span style="font-size:18px;font-weight:600;color:{INK}">{_esc(title)}</span>{code_html}</div>'
+        f'<p style="margin:0;font-size:14.5px;line-height:1.6;color:{INK_2}">{detail}</p>'
+        f"</div>{rows}</div>"
     )
 
 
-_DONE_ICON = (
-    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7fa87f" stroke-width="2.2" '
-    'stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">'
-    '<circle cx="12" cy="12" r="10" stroke="#31463a"></circle><path d="M17 9l-6.2 6L7 11.6"></path></svg>'
+_TICK = (
+    f'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{INK}" '
+    'stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M20 6L9 17l-5-5"></path></svg>'
 )
-_ACTIVE_ICON = (
-    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" '
-    'style="flex-shrink:0"><circle cx="12" cy="12" r="10" stroke="#3a3f49"></circle>'
-    f'<path d="M12 2a10 10 0 0 1 8.7 5" stroke="{ACCENT}"></path></svg>'
+_RING = (
+    f'<span style="width:14px;height:14px;border:2px solid {RED};'
+    f'border-right-color:{RULE};border-radius:50%;display:inline-block"></span>'
 )
-_PENDING_ICON = (
-    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3a3f49" stroke-width="2" '
-    'style="flex-shrink:0"><circle cx="12" cy="12" r="10"></circle></svg>'
+_DOT = (
+    f'<span style="width:12px;height:12px;border:1px solid {RULE};'
+    'border-radius:50%;display:inline-block"></span>'
 )
 
 
 def render_stages(stages: list[tuple[str, str, str, str]], done: int, total: int) -> str:
-    """stages: (state, label, sublabel, meta) where state is done/active/pending."""
     rows = []
     for index, (state, label, sublabel, meta) in enumerate(stages):
-        first, last = index == 0, index == len(stages) - 1
-        radius = (
-            "8px 8px 0 0" if first else ("0 0 8px 8px" if last else "0")
-        )
-        background = {"done": SURFACE, "active": "#1f2229"}.get(state, "#17191e")
-        border = BORDER_STRONG if state == "active" else BORDER
-        icon = {"done": _DONE_ICON, "active": _ACTIVE_ICON}.get(state, _PENDING_ICON)
-        label_colour = {"done": "#d5d9df", "active": TEXT}.get(state, "#7c828c")
-        meta_colour = {"done": "#7fa87f", "active": ACCENT}.get(state, TEXT_4)
+        icon = {"done": _TICK, "active": _RING}.get(state, _DOT)
+        colour = {"done": INK_2, "active": INK}.get(state, FAINT)
+        weight = "500" if state == "active" else "400"
+        background = CARD_BG if state == "active" else "transparent"
+        top = f"border-top:1px solid {RULE_2};" if index == 0 else ""
         sub = (
-            f'<span style="font-size:11.5px;line-height:1.4;color:{TEXT_2}">{_esc(sublabel)}</span>'
+            f'<span style="font-size:12.5px;color:{INK_3}">{_esc(sublabel)}</span>'
             if sublabel and state == "active"
             else ""
         )
         rows.append(
-            f'<div style="display:flex;align-items:center;gap:13px;min-height:56px;padding:11px 15px;'
-            f'background:{background};border:1px solid {border};'
-            f'{"border-top:none;" if not first else ""}border-radius:{radius}">{icon}'
-            f'<div style="display:flex;flex-direction:column;gap:3px;flex-grow:1">'
-            f'<span style="font-size:13.5px;color:{label_colour}">{_esc(label)}</span>{sub}</div>'
-            f'<span style="font-family:{MONO};font-size:11.5px;color:{meta_colour}">{_esc(meta)}</span></div>'
+            f'<div style="display:flex;align-items:center;gap:14px;min-height:54px;'
+            f'padding:10px 18px;background:{background};'
+            f'border-bottom:1px solid {RULE_2};{top}">'
+            f'<span style="width:16px;display:flex;justify-content:center">{icon}</span>'
+            f'<div style="display:flex;flex-direction:column;gap:2px;flex-grow:1">'
+            f'<span style="font-size:15px;font-weight:{weight};color:{colour}">{_esc(label)}</span>'
+            f"{sub}</div>"
+            f'<span style="font-family:{MONO};font-size:11.5px;color:{MUTE}">{_esc(meta)}</span></div>'
         )
     pct = int(100 * done / total) if total else 0
     return (
-        f'<div style="font-family:{SANS};padding-top:20px">'
-        f'<div style="display:flex;align-items:baseline;justify-content:space-between;padding-bottom:10px">'
-        f'<span style="font-size:11px;letter-spacing:0.09em;text-transform:uppercase;font-weight:500;'
-        f'color:{TEXT_3}">Progress</span>'
-        f'<span style="font-family:{MONO};font-size:11.5px;color:{TEXT_2}">step {done} of {total}</span></div>'
-        f'<div style="height:6px;border-radius:3px;background:#24272f;overflow:hidden;display:flex">'
-        f'<div style="width:{pct}%;background:{ACCENT};border-radius:3px"></div></div>'
-        f'<div style="display:flex;flex-direction:column;gap:2px;padding-top:20px">{"".join(rows)}</div></div>'
+        f'<div style="font-family:{SERIF}">'
+        f'<div style="display:flex;align-items:baseline;justify-content:space-between;'
+        f'padding-bottom:12px"><span style="{LBL}">Progress</span>'
+        f'<span style="font-family:{MONO};font-size:11.5px;color:{INK_3}">'
+        f"step {done} of {total}</span></div>"
+        f'<div style="height:3px;background:{RULE};display:flex">'
+        f'<div style="width:{pct}%;background:{RED}"></div></div>'
+        f'<div style="padding-top:18px">{"".join(rows)}</div></div>'
     )
 
 
@@ -400,12 +409,15 @@ def render_summary(
     cards: int, chunks: int, dropped: int, duplicates: int, requests: int, cached: int
 ) -> str:
     return (
-        f'<div style="font-family:{SANS};padding-top:20px;display:flex;flex-direction:column;gap:7px">'
-        f'<p style="margin:0;font-size:15px;line-height:1.4;color:#d5d9df">'
-        f'<span style="font-family:{MONO};font-size:17px;font-weight:500;color:{TEXT}">{cards}</span> '
-        f'cards from <span style="font-family:{MONO};color:{TEXT}">{chunks}</span> '
-        f'{"chunk" if chunks == 1 else "chunks"}.</p>'
-        f'<p style="margin:0;font-family:{MONO};font-size:11.5px;line-height:1.6;color:{TEXT_3}">'
+        f'<div style="font-family:{SERIF}">'
+        f'<div style="padding-bottom:18px;border-bottom:1px solid {RULE}">'
+        f'<p style="margin:0;font-size:26px;line-height:1.1;color:{INK}">'
+        # colour repeated on the span: without it Gradio's dark-theme text
+        # colour wins over the inherited value and it renders near-white.
+        f'<span style="font-weight:600;color:{INK}">{cards} cards</span> '
+        f'<span style="color:{INK_3}">from {chunks} '
+        f'{"chunk" if chunks == 1 else "chunks"}</span></p></div>'
+        f'<p style="margin:10px 0 0;font-family:{MONO};font-size:11px;color:{MUTE}">'
         f"dropped {dropped} &nbsp;·&nbsp; duplicates {duplicates} &nbsp;·&nbsp; "
         f"requests {requests} &nbsp;·&nbsp; cached {cached}</p></div>"
     )
@@ -417,55 +429,50 @@ def render_cards(entries: list[SourcedCard]) -> str:
     blocks = []
     for entry in entries:
         card = entry.card
+        rule_colour = DIFFICULTY.get(card.difficulty, (MUTE, 0))[0]
         blocks.append(
-            f'<div style="background:{SURFACE};border:1px solid {BORDER};border-radius:10px;'
-            f'padding:14px 15px;display:flex;flex-direction:column;gap:10px">'
+            f'<div style="background:{CARD_BG};border:1px solid {RULE};'
+            f'border-left:3px solid {rule_colour};border-radius:2px;padding:16px 18px 18px;'
+            f'display:flex;flex-direction:column;gap:12px">'
             f'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
-            f'<div style="display:flex;align-items:center;gap:7px">{meter(card.difficulty)}</div>'
-            f'<span style="font-family:{MONO};font-size:11px;color:{TEXT_3}">{_esc(card.topic)}</span></div>'
-            f'<p style="margin:0;font-size:14.5px;font-weight:500;line-height:1.4;color:{TEXT};'
+            f'{meter(card.difficulty)}<span style="{LBL}">{_esc(card.topic)}</span></div>'
+            f'<p style="margin:0;font-size:18px;font-weight:500;line-height:1.32;color:{INK};'
             f'text-wrap:pretty">{_esc(card.question)}</p>'
-            f'<details><summary style="font-size:11.5px;color:{TEXT_3};cursor:pointer;list-style:none">'
-            f"Show answer</summary>"
-            f'<p style="margin:10px 0 0;font-family:{SERIF};font-size:14px;line-height:1.68;'
-            f'color:#ccd1d8;text-wrap:pretty">{_esc(card.answer)}</p></details></div>'
+            f'<div style="height:1px;background:{RULE_2}"></div>'
+            f'<details class="ans"><summary>'
+            f'<span class="txt" style="font-size:15px;line-height:1.62;color:{INK_2};'
+            f'text-wrap:pretty">{_esc(card.answer)}</span>'
+            f'<span class="more" style="{LBL};color:{RED}"></span>'
+            f"</summary></details></div>"
         )
-    # auto-fill rather than a fixed count: one column on a phone, two or three
-    # across a browser window, without a breakpoint to maintain.
     return (
-        f'<div style="font-family:{SANS};padding-top:20px;display:grid;'
-        f"grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"
+        f'<div style="font-family:{SERIF};padding-top:22px;display:grid;'
+        f"grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;"
         f'align-items:start">{"".join(blocks)}</div>'
     )
 
 
-EMPTY_RESULTS = (
-    f'<div style="font-family:{SANS};margin-top:20px;border:1px dashed {BORDER};'
-    f'border-radius:10px;padding:44px 24px;text-align:center">'
-    f'<p style="margin:0;font-size:13px;color:{TEXT_4}">Cards appear here once you generate.</p></div>'
-)
-
-
 def render_partial(failures: list[str]) -> str:
     lines = "".join(
-        f'<p style="margin:4px 0 0;font-family:{MONO};font-size:11.5px;line-height:1.5;'
-        f'color:#a89a75">{_esc(f)}</p>'
-        for f in failures
+        f'<p style="margin:5px 0 0;font-family:{MONO};font-size:12px;line-height:1.5;'
+        f'color:{INK_3}">{_esc(failure)}</p>'
+        for failure in failures
     )
     count = len(failures)
     return (
-        f'<div style="font-family:{SANS};padding-top:16px">'
-        f'<div style="border:1px solid #4a3f2e;background:#211d16;border-radius:10px;padding:14px 15px">'
-        f'<div style="display:flex;align-items:flex-start;gap:11px">'
-        f'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d2a24c" stroke-width="1.9" '
-        f'stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px">'
-        f'<path d="M10.3 4.3L2.8 17a1.8 1.8 0 0 0 1.6 2.7h15.2A1.8 1.8 0 0 0 21.2 17L13.7 4.3a1.8 1.8 0 0 0-3.1 0z"></path>'
-        f'<path d="M12 9.5v4"></path><path d="M12 17h.01"></path></svg>'
-        f'<div style="display:flex;flex-direction:column">'
-        f'<span style="font-size:13.5px;font-weight:600;color:#ddc189">'
-        f'{count} chunk{"" if count == 1 else "s"} failed</span>{lines}'
-        f"</div></div></div></div>"
+        f'<div style="font-family:{SERIF};padding-top:18px">'
+        f'<div style="border:1px solid {RULE};border-left:3px solid {AMBER};background:#faf4e8;'
+        f'border-radius:2px;padding:16px 20px">'
+        f'<span style="font-size:16px;font-weight:600;color:{INK}">'
+        f'{count} chunk{"" if count == 1 else "s"} failed</span>{lines}</div></div>'
     )
+
+
+EMPTY_RESULTS = (
+    f'<div style="font-family:{SERIF};border:1px dashed {RULE};border-radius:2px;'
+    f'padding:150px 24px;text-align:center">'
+    f'<p style="margin:0;font-size:15px;color:{MUTE}">Cards appear here once you generate.</p></div>'
+)
 
 
 # --- pipeline glue ---------------------------------------------------------
@@ -511,10 +518,23 @@ def write_csv(entries: list[SourcedCard]) -> str:
     return str(path)
 
 
-NO_INPUT = render_error(
-    "Nothing to work with",
-    "",
-    "Paste notes above or upload a .md or .txt file, then try again.",
+NO_INPUT = (
+    f'<div style="font-family:{SERIF};border:1px dashed {RULE};border-radius:2px;'
+    f'padding:44px 24px;text-align:center">'
+    f'<p style="margin:0;font-size:16px;color:{INK_2}">Nothing to work with</p>'
+    f'<p style="margin:7px 0 0;font-size:13.5px;color:{MUTE}">Paste notes on the left '
+    f"or upload a .md or .txt file, then try again.</p></div>"
+)
+
+_NO_KEY_STEPS = (
+    "Add GEMINI_API_KEY to .env at the project root",
+    "Reload the page once it is set",
+)
+
+_QUOTA_STEPS = (
+    "Wait a minute, then try again",
+    "Lower Max chunks and split the work",
+    "Run again tomorrow if the daily cap is hit",
 )
 
 
@@ -533,19 +553,6 @@ def preview(notes_text: str, files: list[str] | None, max_chunks: float) -> str:
 
     tokens = sum(estimate_tokens(chunk.text) for chunk in chunks)
     return render_estimate(len(chunks), tokens, settings.requests_per_minute)
-
-
-_NO_KEY_STEPS = (
-    "Add a Space secret named GEMINI_API_KEY",
-    "Or put GEMINI_API_KEY=your-key in .env locally",
-    "Reload the page once it is set",
-)
-
-_QUOTA_STEPS = (
-    "Wait a minute, then try again",
-    "Lower Max chunks and split the work",
-    "Run again tomorrow if the daily cap is hit",
-)
 
 
 def active_step(stages: list[list[str]]) -> int:
@@ -567,7 +574,12 @@ def _stages(use_dedupe: bool) -> list[list[str]]:
     ]
     if use_dedupe:
         stages.append(
-            ["pending", "Removing near-duplicates", "First run loads a model, ~25s", ""]
+            [
+                "pending",
+                "Removing near-duplicates",
+                "First run loads a model, about 25 seconds",
+                "",
+            ]
         )
     stages.append(["pending", "Writing CSV", "", ""])
     return stages
@@ -605,14 +617,18 @@ def generate(
             result = pipeline.run([chunk], settings, client)
         except errors.APIError as exc:
             detail = (
-                f"The free tier allows {settings.requests_per_minute} requests per "
-                f"minute. {_esc(str(exc.message))}"
+                f"The free tier allows {settings.requests_per_minute} requests a "
+                f"minute. {_esc(str(exc.message))} Your notes are still here."
             )
             steps = _QUOTA_STEPS if exc.code == 429 else ()
             yield (
-                render_error("Out of quota" if exc.code == 429 else "API error",
-                             f"HTTP {exc.code}", detail, steps)
-                + (render_cards(outcome.entries) if outcome.entries else ""),
+                render_error(
+                    "Out of quota" if exc.code == 429 else "API error",
+                    f"HTTP {exc.code}",
+                    detail,
+                    steps,
+                )
+                + render_cards(outcome.entries),
                 "",
                 hide,
             )
@@ -665,8 +681,8 @@ def generate(
         summary += render_partial(outcome.failures)
     if outcome.dedupe_note:
         summary += (
-            f'<p style="margin:10px 0 0;font-family:{SANS};font-size:11.5px;'
-            f'color:{TEXT_3}">Dedupe skipped: {_esc(outcome.dedupe_note)}</p>'
+            f'<p style="margin:10px 0 0;font-family:{SERIF};font-size:12.5px;'
+            f'color:{MUTE}">Dedupe skipped: {_esc(outcome.dedupe_note)}</p>'
         )
 
     yield (
@@ -678,15 +694,15 @@ def generate(
 
 # --- ui --------------------------------------------------------------------
 
-with gr.Blocks(title="Flashcard Generator") as demo:
+with gr.Blocks(title="Flashcards") as demo:
     gr.HTML(header_html())
 
     with gr.Row(elem_id="main"):
         with gr.Column(elem_id="left"):
             notes_input = gr.Textbox(
                 elem_id="notes",
-                lines=10,
-                max_lines=24,
+                lines=9,
+                max_lines=20,
                 placeholder="Paste lecture notes here…",
                 show_label=False,
                 container=False,
@@ -719,7 +735,7 @@ with gr.Blocks(title="Flashcard Generator") as demo:
         with gr.Column(elem_id="right"):
             status = gr.HTML(EMPTY_RESULTS)
             download = gr.DownloadButton(
-                "Download CSV", visible=False, elem_id="dlbtn"
+                "DOWNLOAD CSV", visible=False, elem_id="dlbtn"
             )
             cards = gr.HTML()
 
@@ -735,8 +751,6 @@ with gr.Blocks(title="Flashcard Generator") as demo:
 
 if __name__ == "__main__":
     # server_port is passed only when PORT is set. Gradio otherwise resolves the
-    # host and port from GRADIO_SERVER_NAME / GRADIO_SERVER_PORT, which is how
-    # Hugging Face Spaces tells it to bind 0.0.0.0:7860 -- hardcoding a port here
-    # would override that.
+    # host and port from GRADIO_SERVER_NAME / GRADIO_SERVER_PORT.
     port = os.environ.get("PORT")
     demo.launch(css=CSS, **({"server_port": int(port)} if port else {}))
