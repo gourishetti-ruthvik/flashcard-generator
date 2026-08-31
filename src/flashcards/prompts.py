@@ -21,16 +21,37 @@ Rules:
 - difficulty: "easy" for recall or a definition, "medium" for comparison or
   application, "hard" for trade-offs or edge cases.
 - Prefer fewer excellent cards over padding the list to the limit.
+"""
 
+# Only the benchmark's control arm uses this. In JSON mode the schema is
+# enforced server-side and none of it is needed.
+_JSON_FORMAT = """
+Return ONLY a JSON array and nothing else: no prose, no explanation, no markdown
+code fences. Each element must be an object with exactly these four keys:
+  "question": string
+  "answer": string
+  "topic": string
+  "difficulty": one of "easy", "medium", "hard"
+"""
+
+_SOURCE = """
 Section heading: {heading}
 
 Source text:
 {text}"""
 
 
-def build_generation_prompt(chunk: Chunk, max_cards: int) -> str:
-    return _RULES.format(
-        max_cards=max_cards,
-        heading=chunk.heading or "(none)",
-        text=chunk.text,
+def _compose(chunk: Chunk, max_cards: int, extra: str = "") -> str:
+    return (
+        _RULES.format(max_cards=max_cards)
+        + extra
+        + _SOURCE.format(heading=chunk.heading or "(none)", text=chunk.text)
     )
+
+
+def build_generation_prompt(chunk: Chunk, max_cards: int) -> str:
+    return _compose(chunk, max_cards)
+
+
+def build_json_instruction_prompt(chunk: Chunk, max_cards: int) -> str:
+    return _compose(chunk, max_cards, _JSON_FORMAT)

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import typer
 
-from flashcards import __version__, dedupe, exporter, pipeline
+from flashcards import __version__, benchmark as benchmark_mod, dedupe, exporter, pipeline
 from flashcards.chunker import estimate_tokens
 from flashcards.client import GeminiClient
 from flashcards.config import ConfigError, load_settings
@@ -88,7 +88,45 @@ def generate(
     )
 
 
-# `benchmark` lands in Phase F.
+@app.command()
+def benchmark(
+    source: Path = typer.Argument(..., exists=True, help="Note file or directory."),
+    limit: int = typer.Option(None, "--limit", help="Only use N chunks."),
+    repeats: int = typer.Option(1, "--repeats", help="Passes over each arm."),
+) -> None:
+    """Compare JSON mode against prompt-based JSON instructions."""
+    try:
+        settings = load_settings()
+    except ConfigError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(code=1) from exc
+
+    chunks = pipeline.collect_chunks(source, settings)[:limit]
+    if not chunks:
+        typer.secho("no chunks found", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    calls = len(chunks) * 2 * repeats
+    typer.echo(f"{len(chunks)} chunks x 2 arms x {repeats} = {calls} uncached calls\n")
+
+    client = GeminiClient(settings)
+    arms = benchmark_mod.run(chunks, settings, client, repeats=repeats)
+
+    typer.echo(f"{'arm':<32}{'runs':>6}{'failed':>8}{'rate':>8}{'mean latency':>15}")
+    typer.echo("-" * 69)
+    for arm in arms:
+        typer.echo(
+            f"{arm.name:<32}{arm.runs:>6}{len(arm.failures):>8}"
+            f"{arm.failure_rate:>7.0%}{arm.mean_latency:>14.2f}s"
+        )
+
+    for arm in arms:
+        for failure in arm.failures:
+            typer.secho(f"{arm.name}: {failure}", fg=typer.colors.RED)
+
+    typer.echo(f"\ncards produced: {' / '.join(str(a.cards) for a in arms)}")
+    typer.echo(f"requests: {client.request_count}")
+
 
 if __name__ == "__main__":
     app()

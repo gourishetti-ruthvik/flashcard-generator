@@ -7,7 +7,13 @@ from typing import Any
 import pytest
 from google.genai import errors
 
-from flashcards.client import GeminiClient, GeminiError, TokenBucket
+from flashcards.client import (
+    MAX_RETRY_SLEEP,
+    GeminiClient,
+    GeminiError,
+    TokenBucket,
+    retry_delay,
+)
 from flashcards.config import Settings, load_settings
 from flashcards.models import Flashcard
 
@@ -70,8 +76,16 @@ def fake_api(monkeypatch: pytest.MonkeyPatch):
     return install
 
 
-def rate_limited() -> errors.ClientError:
-    return errors.ClientError(429, {"error": {"message": "quota"}})
+def rate_limited(retry_after: str | None = None) -> errors.ClientError:
+    error: dict[str, object] = {"message": "quota"}
+    if retry_after is not None:
+        error["details"] = [
+            {
+                "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                "retryDelay": retry_after,
+            }
+        ]
+    return errors.ClientError(429, {"error": error})
 
 
 def overloaded() -> errors.ServerError:
@@ -216,6 +230,43 @@ def test_backoff_grows_between_attempts(
     fake_api([rate_limited(), rate_limited(), reply([CARD])])
     GeminiClient(settings).generate_cards("prompt")
     assert _no_backoff_sleep == [1.0, 2.0]
+
+
+def test_server_retry_delay_overrides_local_backoff(
+    settings: Settings, fake_api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The live 429 asked for 40 s while the largest local backoff is 4 s, so
+    # ignoring the hint guaranteed the retry failed too.
+    slept: list[float] = []
+    monkeypatch.setattr("flashcards.client.time.sleep", slept.append)
+    fake_api([rate_limited("40s"), reply([CARD])])
+    GeminiClient(settings).generate_cards("prompt")
+    assert slept == [41.0]
+
+
+def test_retry_delay_is_capped(
+    settings: Settings, fake_api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    slept: list[float] = []
+    monkeypatch.setattr("flashcards.client.time.sleep", slept.append)
+    fake_api([rate_limited("3600s"), reply([CARD])])
+    GeminiClient(settings).generate_cards("prompt")
+    assert slept == [MAX_RETRY_SLEEP]
+
+
+@pytest.mark.parametrize(
+    "payload, expected",
+    [
+        ({"error": {"details": [{"retryDelay": "12s"}]}}, 12.0),
+        ({"error": {"details": [{"retryDelay": "1.5s"}]}}, 1.5),
+        ({"error": {"details": [{"retryDelay": "bogus"}]}}, None),
+        ({"error": {"details": [{"other": "x"}]}}, None),
+        ({"error": {"message": "no details"}}, None),
+        ({}, None),
+    ],
+)
+def test_retry_delay_extraction(payload: dict, expected: float | None) -> None:
+    assert retry_delay(errors.ClientError(429, payload)) == expected
 
 
 def test_non_retryable_error_raises_immediately(

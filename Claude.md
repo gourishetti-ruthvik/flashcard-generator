@@ -32,7 +32,9 @@ using the Gemini API. CLI tool, no web UI.
 
 ## API constraints
 
-- Gemini free tier: ~15 RPM, ~1500 RPD on Flash models. This is a hard ceiling.
+- Gemini free tier: 5 RPM on `gemini-2.5-flash` (measured — the API rejects the
+  6th call in a minute reporting `quotaValue: 5`, not the widely quoted 15),
+  ~1500 RPD. This is a hard ceiling.
 - Every API call MUST route through the client wrapper in
   `src/flashcards/client.py`. Nothing else touches the API directly.
 - The wrapper provides: disk cache keyed on prompt hash, token-bucket rate

@@ -31,7 +31,10 @@ class Settings(BaseModel):
     cards_per_chunk: int = Field(default=5, gt=0)
     chunk_target_tokens: int = Field(default=800, gt=0)
 
-    requests_per_minute: int = Field(default=15, gt=0)
+    # Measured, not guessed: the free tier rejects the 6th call in a minute for
+    # gemini-2.5-flash with "quotaValue: 5". The commonly quoted 15 RPM does not
+    # apply to this model.
+    requests_per_minute: int = Field(default=5, gt=0)
     max_attempts: int = Field(default=4, gt=0)
 
     cache_dir: Path = PROJECT_ROOT / ".llm_cache"

@@ -45,7 +45,7 @@ def test_verified_defaults(env_file: Path) -> None:
     settings = load_settings(env_file)
     assert settings.model_id == "gemini-2.5-flash"
     assert settings.thinking_budget == 0
-    assert settings.requests_per_minute == 15
+    assert settings.requests_per_minute == 5
     assert settings.chunk_target_tokens == 800
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import re
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -19,8 +20,28 @@ from flashcards.models import Flashcard
 RETRY_CODES = frozenset({429, 503})
 
 
+# A quota error can carry a RetryInfo saying exactly how long to wait. Ignoring
+# it and using only exponential backoff guarantees failure when the server asks
+# for 40 s and the largest local backoff is 4 s.
+_RETRY_DELAY = re.compile(r"^(\d+(?:\.\d+)?)s$")
+MAX_RETRY_SLEEP = 65.0
+
+
 class GeminiError(RuntimeError):
     """Raised when the model returns no usable cards."""
+
+
+def retry_delay(exc: errors.APIError) -> float | None:
+    details = getattr(exc, "details", None)
+    if not isinstance(details, dict):
+        return None
+    for item in details.get("error", {}).get("details", []):
+        if not isinstance(item, dict):
+            continue
+        match = _RETRY_DELAY.match(str(item.get("retryDelay", "")))
+        if match:
+            return float(match.group(1))
+    return None
 
 
 def _finish_reason(response: types.GenerateContentResponse) -> str:
@@ -129,7 +150,9 @@ class GeminiClient:
             encoding="utf-8",
         )
 
-    def _call_with_retry(self, prompt: str) -> types.GenerateContentResponse:
+    def _call_with_retry(
+        self, prompt: str, config: types.GenerateContentConfig
+    ) -> types.GenerateContentResponse:
         for attempt in range(self._settings.max_attempts):
             self._bucket.acquire()
             self._request_count += 1
@@ -137,7 +160,7 @@ class GeminiClient:
                 return self._client.models.generate_content(
                     model=self._settings.model_id,
                     contents=prompt,
-                    config=self._generation_config(),
+                    config=config,
                 )
             except errors.APIError as exc:
                 if (
@@ -147,7 +170,13 @@ class GeminiClient:
                     raise
                 # Full jitter rather than a fixed backoff: when several chunks
                 # hit the limit together, identical sleeps would retry in lockstep.
-                time.sleep(random.uniform(0.0, 2.0**attempt))
+                backoff = random.uniform(0.0, 2.0**attempt)
+                # The server knows when the quota window reopens; local backoff
+                # is only a floor when it does not say.
+                server_hint = retry_delay(exc)
+                if server_hint is not None:
+                    backoff = max(backoff, min(server_hint + 1.0, MAX_RETRY_SLEEP))
+                time.sleep(backoff)
         raise AssertionError("unreachable: loop either returns or raises")
 
     def generate_cards(self, prompt: str, use_cache: bool = True) -> list[Flashcard]:
@@ -160,7 +189,7 @@ class GeminiClient:
                 self._cache_hits += 1
                 return cached
 
-        response = self._call_with_retry(prompt)
+        response = self._call_with_retry(prompt, self._generation_config())
 
         # In JSON mode the schema is enforced server-side, so malformed JSON is
         # not the failure to guard against. What actually happens is a reply
@@ -175,3 +204,20 @@ class GeminiClient:
         cards = list(cards)
         self._write_cache(key, cards)
         return cards
+
+    def generate_text(self, prompt: str) -> str:
+        """Unconstrained completion. Only the benchmark's control arm uses this.
+
+        Deliberately uncached: it exists to measure what happens without the
+        schema, and a cached reply would measure nothing.
+        """
+        response = self._call_with_retry(
+            prompt,
+            types.GenerateContentConfig(
+                temperature=self._settings.temperature,
+                thinking_config=types.ThinkingConfig(
+                    thinking_budget=self._settings.thinking_budget
+                ),
+            ),
+        )
+        return response.text or ""
