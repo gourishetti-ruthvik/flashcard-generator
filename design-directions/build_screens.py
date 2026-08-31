@@ -134,30 +134,51 @@ def squares(level: str) -> str:
     )
 
 
-def card(question: str, topic: str, level: str, answer: str, open_: bool = False) -> str:
+FLIP_ICON = (
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 7.5 4"></path><path d="M20 3v4h-4"></path>'
+    '<path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-7.5-4"></path><path d="M4 21v-4h4"></path></svg>'
+)
+
+# The back of an index card is ruled; the answer's line-height matches the pitch.
+RULED = (
+    f"background-image:repeating-linear-gradient({CARD_BG} 0 27px,#ece5d8 27px 28px);"
+    "background-position:0 52px;"
+)
+
+FACE = (
+    f"height:296px;background:{CARD_BG};border:1px solid {RULE};border-radius:2px;"
+    "padding:16px 18px;display:flex;flex-direction:column;gap:11px;overflow:hidden;"
+)
+
+
+def card(question: str, topic: str, level: str, answer: str, back: bool = False) -> str:
+    """One face of a flip card: the question, or the ruled reverse."""
     rule_colour = LEVELS[level][1]
-    if open_:
-        tail = (
-            f'<div style="height:1px;background:{RULE_2}"></div>'
-            f'<p style="margin:0;font-size:15px;line-height:1.62;color:{INK_2};text-wrap:pretty">{answer}</p>'
-            f'<span class="lbl" style="color:{RED}">Hide answer</span>'
+    edge = f"border-left:3px solid {rule_colour};"
+
+    if back:
+        return (
+            f'<div style="{FACE}{RULED}{edge}">'
+            f'<div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0">'
+            f'<span class="lbl">{topic}</span>'
+            f'<span class="lbl" style="color:{rule_colour}">answer</span></div>'
+            f'<p style="margin:0;font-size:15px;line-height:28px;color:{INK_2};'
+            f'text-wrap:pretty;flex-grow:1">{answer}</p></div>'
         )
-    else:
-        tail = (
-            f'<div style="height:1px;background:{RULE_2}"></div>'
-            f'<p style="margin:0;font-size:14px;line-height:1.55;color:#8f8879;max-height:44px;'
-            f'overflow:hidden;text-wrap:pretty">{answer}</p>'
-            f'<span class="lbl" style="color:{RED}">Reveal answer</span>'
-        )
+
     return (
-        f'<div class="card" style="border-left:3px solid {rule_colour}">'
-        f'<div style="display:flex;align-items:center;justify-content:space-between">'
+        f'<div style="{FACE}{edge}box-shadow:0 8px 22px rgba(35,32,28,.06)">'
+        f'<div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0">'
         f'<div style="display:flex;align-items:center;gap:8px">'
         f'<span style="display:inline-flex;gap:3px">{squares(level)}</span>'
         f'<span class="lbl" style="color:{INK}">{level}</span></div>'
         f'<span class="lbl">{topic}</span></div>'
-        f'<p style="margin:0;font-size:18px;font-weight:500;line-height:1.32;text-wrap:pretty">{question}</p>'
-        f"{tail}</div>"
+        f'<p style="margin:0;font-size:18px;font-weight:500;line-height:1.36;'
+        f'text-wrap:pretty;flex-grow:1">{question}</p>'
+        f'<div style="display:flex;align-items:center;gap:6px;color:{rule_colour};flex-shrink:0">'
+        f'{FLIP_ICON}<span class="lbl" style="color:{rule_colour}">flip for answer</span></div></div>'
     )
 
 
@@ -315,12 +336,48 @@ def page(name: str, results: str, height: int, filled: bool = True, note: str = 
     print(f"wrote {name}.dc.html")
 
 
+def anatomy() -> str:
+    """Front, mid-flip and back in a row, to document the rotation."""
+    question, topic, level, answer = CARD_DATA[0]
+    mid = (
+        '<div style="perspective:1400px">'
+        '<div style="transform:rotateY(-52deg);transform-origin:center">'
+        f"{card(question, topic, level, answer)}</div></div>"
+    )
+    labels = ("Front · at rest", "Mid-flip · 0.6s rotateY", "Back · ruled, answer")
+    faces = (card(question, topic, level, answer), mid,
+             card(question, topic, level, answer, back=True))
+    cells = "".join(
+        f'<div style="display:flex;flex-direction:column;gap:12px">'
+        f'<span class="lbl">{label}</span>{face}</div>'
+        for label, face in zip(labels, faces)
+    )
+    return (
+        f'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));'
+        f'gap:36px;padding-top:26px">{cells}</div>'
+        f'<p style="margin:30px 0 0;font-size:14.5px;line-height:1.6;color:{INK_3};max-width:640px">'
+        "The flip is a hidden checkbox driving a rotateY, so it needs no JavaScript and "
+        "stays keyboard-operable. Cards are a fixed 296px because the back is absolutely "
+        "positioned. Hover lifts the card 3px; entrance is staggered 45ms per card. All "
+        "motion is dropped under prefers-reduced-motion, where the flip still works.</p>"
+    )
+
+
 if __name__ == "__main__":
     collapsed = "".join(card(*c) for c in CARD_DATA)
-    opened = card(*CARD_DATA[0], open_=True) + card(*CARD_DATA[1], open_=True) + \
-        card(*CARD_DATA[2]) + card(*CARD_DATA[3])
+    opened = (
+        card(*CARD_DATA[0], back=True) + card(*CARD_DATA[1])
+        + card(*CARD_DATA[2]) + card(*CARD_DATA[3], back=True)
+    )
 
     page("Main", summary() + grid(collapsed), 1120)
+
+    # Standalone sheet: no form sidebar, it documents the card itself.
+    (HERE / "FlipAnatomy.dc.html").write_text(
+        head(700, width=1180) + f'<div style="padding-top:8px">{anatomy()}</div>' + TAIL,
+        encoding="utf-8",
+    )
+    print("wrote FlipAnatomy.dc.html")
     page("Empty", EMPTY_RESULTS, 900, filled=False)
     page("Filled", EMPTY_RESULTS, 900)
     page("Preview", ESTIMATE, 900)
