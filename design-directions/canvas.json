@@ -1,0 +1,25 @@
+{
+  "artboards": [
+    { "file": "Empty.dc.html",      "x": 0,    "y": 0,    "w": 1280, "h": 900 },
+    { "file": "Filled.dc.html",     "x": 1400, "y": 0,    "w": 1280, "h": 900 },
+    { "file": "Preview.dc.html",    "x": 2800, "y": 0,    "w": 1280, "h": 900 },
+
+    { "file": "Generating.dc.html", "x": 0,    "y": 1140, "w": 1280, "h": 1020 },
+    { "file": "Main.dc.html",       "x": 1400, "y": 1140, "w": 1280, "h": 1120,
+      "title": "Results" },
+    { "file": "CardOpen.dc.html",   "x": 2800, "y": 1140, "w": 1280, "h": 1220 },
+
+    { "file": "Errors.dc.html",     "x": 0,    "y": 2500, "w": 1280, "h": 900 },
+    { "file": "Partial.dc.html",    "x": 1400, "y": 2500, "w": 1280, "h": 1020 },
+    { "file": "Narrow.dc.html",     "x": 2800, "y": 2500, "w": 760,  "h": 2000 }
+  ],
+  "annotations": [
+    { "id": "row-setup", "x": 0, "y": -140, "w": 1000,
+      "text": "RULED PAPER. Newsreader serif on warm paper, cards as index cards with a coloured margin rule. Difficulty is filled/hollow squares plus the word, so it survives greyscale.\nRow 1 — getting started: empty, notes pasted, free preview estimate." },
+    { "id": "row-run", "x": 0, "y": 1000, "w": 1000,
+      "text": "Row 2 — the run: staged progress with cards arriving underneath, the results grid, and one card opened. Answers are clamped to two lines by default so a dozen cards stay scannable; Reveal opens them." },
+    { "id": "row-fail", "x": 0, "y": 2360, "w": 1000,
+      "text": "Row 3 — failure and narrow. Errors sit where the results would be, so the notes and any cards already generated stay on screen. Narrow is the same page below 900px." }
+  ],
+  "launch": { "view": "canvas" }
+}

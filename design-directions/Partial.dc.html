@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #faf7f2; color: #23201c;
+           font-family: 'Newsreader', Georgia, serif; }
+    a { color: #a63d2f; } a:hover { color: #7d2c20; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+    .lbl { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10.5px;
+           letter-spacing: .12em; text-transform: uppercase; color: #8c8578; }
+    .field { border: 1px solid #d9d2c6; background: #fffdfa; border-radius: 2px; }
+    .btn { border-radius: 2px; display: flex; align-items: center;
+           justify-content: center; gap: 8px; font-size: 15px; }
+    .card { background: #fffdfa; border: 1px solid #d9d2c6; border-radius: 2px;
+            padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
+  </style>
+</helmet>
+
+<div style="width: 1280px; min-height: 1020px; background: #faf7f2; padding: 0 56px 48px;">
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; padding: 34px 0 20px; border-bottom: 2px solid #23201c;">
+    <div style="display: flex; align-items: baseline; gap: 14px;">
+      <h1 style="margin: 0; font-size: 34px; font-weight: 600; letter-spacing: -0.02em;">Flashcards</h1>
+      <span style="font-size: 16px; color: #6d6559;">notes in, Anki cards out</span>
+    </div>
+    <span class="mono" style="font-size: 11px; color: #8c8578;">gemini-2.5-flash</span>
+  </div>
+<div style="display: flex; gap: 44px; align-items: flex-start; padding-top: 28px;">
+    <div style="flex: 0 0 320px; display: flex; flex-direction: column; gap: 14px;">
+      <span class="lbl">Notes</span>
+      <div class="field" style="height: 232px; padding: 14px 16px; border: 1px solid #d9d2c6; font-size: 14px; line-height: 1.62; color: #4a443b; overflow: hidden;">Supervised learning is one of the most fundamental concepts in machine learning. It is a learning approach where a model is trained using labeled data, meaning every input has a corresponding correct output…</div>
+      <div class="field" style="display: flex; align-items: center; justify-content: space-between; height: 46px; padding: 0 16px; font-size: 14px; color: #6d6559;">
+        <span>Upload .md or .txt</span><span class="mono" style="font-size: 15px;">+</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px; padding-top: 4px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 14.5px;">Max chunks</span>
+          <div class="field mono" style="width: 74px; height: 38px; display: flex; align-items: center; justify-content: center; font-size: 15px;">5</div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 14.5px;">Remove near-duplicates</span>
+          <div style="width: 42px; height: 24px; border-radius: 12px; background: #a63d2f; display: flex; align-items: center; justify-content: flex-end; padding: 3px;">
+            <div style="width: 18px; height: 18px; border-radius: 9px; background: #fffdfa;"></div>
+          </div>
+        </div>
+      </div>
+      <p style="margin: 2px 0 0; font-size: 12.5px; line-height: 1.5; color: #8c8578;">Free tier allows <span class="mono" style="color: #6d6559;">5</span> requests a minute. Higher values wait between calls.</p>
+      <div style="display: flex; flex-direction: column; gap: 9px; padding-top: 4px;">
+        <div class="btn" style="height: 44px; border: 1px solid #23201c; background: transparent; color: #23201c;">Preview <span class="mono" style="font-size: 11px; color: #6d6559;">free</span></div>
+        <div class="btn" style="height:48px;background:#23201c;color:#faf7f2;font-weight:500">Generate</div>
+      </div>
+      
+    </div>
+<div style="flex: 1 1 0; min-width: 0;"><div style="border:1px solid #d9d2c6;border-left:3px solid #c98a2e;background:#faf4e8;border-radius:2px;padding:16px 20px;display:flex;flex-direction:column;gap:7px"><div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:18px;font-weight:600;color:#23201c">1 chunk failed</span><span class="mono" style="font-size:11px;color:#8c8578">MAX_TOKENS</span></div><p style="margin:0;font-size:14.5px;line-height:1.6;color:#4a443b">lecture_04#2 stopped early. The other three finished, and their cards are below.</p></div><div style="height:18px"></div><div style="display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:18px;border-bottom:1px solid #d9d2c6"><p style="margin:0;font-size:26px;line-height:1.1"><span style="font-weight:600">9 cards</span> <span style="color:#6d6559">from 4 chunks</span></p><div class="btn mono" style="height:44px;padding:0 22px;background:#a63d2f;color:#fffdfa;font-size:13px;letter-spacing:.04em">DOWNLOAD CSV</div></div><p class="mono" style="margin:10px 0 0;font-size:11px;color:#8c8578">dropped 1 &nbsp;·&nbsp; duplicates 2 &nbsp;·&nbsp; requests 4 &nbsp;·&nbsp; cached 0</p><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding-top:22px;align-items:start"><div class="card" style="border-left:3px solid #a63d2f"><div style="display:flex;align-items:center;justify-content:space-between"><div style="display:flex;align-items:center;gap:8px"><span style="display:inline-flex;gap:3px"><span style="width:7px;height:7px;background:#23201c"></span><span style="width:7px;height:7px;border:1px solid #b9b1a3"></span><span style="width:7px;height:7px;border:1px solid #b9b1a3"></span></span><span class="lbl" style="color:#23201c">easy</span></div><span class="lbl">Supervised Learning Basics</span></div><p style="margin:0;font-size:18px;font-weight:500;line-height:1.32;text-wrap:pretty">What is supervised learning in machine learning?</p><div style="height:1px;background:#e6e0d5"></div><p style="margin:0;font-size:14px;line-height:1.55;color:#8f8879;max-height:44px;overflow:hidden;text-wrap:pretty">Supervised learning trains a model on labelled data, where every input has a corresponding correct output. The goal is to learn the relationship between input features and the target variable.</p><span class="lbl" style="color:#a63d2f">Reveal answer</span></div><div class="card" style="border-left:3px solid #a63d2f"><div style="display:flex;align-items:center;justify-content:space-between"><div style="display:flex;align-items:center;gap:8px"><span style="display:inline-flex;gap:3px"><span style="width:7px;height:7px;background:#23201c"></span><span style="width:7px;height:7px;border:1px solid #b9b1a3"></span><span style="width:7px;height:7px;border:1px solid #b9b1a3"></span></span><span class="lbl" style="color:#23201c">easy</span></div><span class="lbl">NLP Preprocessing</span></div><p style="margin:0;font-size:18px;font-weight:500;line-height:1.32;text-wrap:pretty">What is tokenization in Natural Language Processing?</p><div style="height:1px;background:#e6e0d5"></div><p style="margin:0;font-size:14px;line-height:1.55;color:#8f8879;max-height:44px;overflow:hidden;text-wrap:pretty">Tokenization is the process of breaking text into smaller units called tokens, such as words, subwords, or characters. It is a crucial initial preprocessing step because machine learning models cannot directly process raw text.</p><span class="lbl" style="color:#a63d2f">Reveal answer</span></div></div></div></div></div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #faf7f2; color: #23201c;
+           font-family: 'Newsreader', Georgia, serif; }
+    a { color: #a63d2f; } a:hover { color: #7d2c20; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+    .lbl { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10.5px;
+           letter-spacing: .12em; text-transform: uppercase; color: #8c8578; }
+    .field { border: 1px solid #d9d2c6; background: #fffdfa; border-radius: 2px; }
+    .btn { border-radius: 2px; display: flex; align-items: center;
+           justify-content: center; gap: 8px; font-size: 15px; }
+    .card { background: #fffdfa; border: 1px solid #d9d2c6; border-radius: 2px;
+            padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
+  </style>
+</helmet>
+
+<div style="width: 1280px; min-height: 900px; background: #faf7f2; padding: 0 56px 48px;">
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; padding: 34px 0 20px; border-bottom: 2px solid #23201c;">
+    <div style="display: flex; align-items: baseline; gap: 14px;">
+      <h1 style="margin: 0; font-size: 34px; font-weight: 600; letter-spacing: -0.02em;">Flashcards</h1>
+      <span style="font-size: 16px; color: #6d6559;">notes in, Anki cards out</span>
+    </div>
+    <span class="mono" style="font-size: 11px; color: #8c8578;">gemini-2.5-flash</span>
+  </div>
+<div style="display: flex; gap: 44px; align-items: flex-start; padding-top: 28px;">
+    <div style="flex: 0 0 320px; display: flex; flex-direction: column; gap: 14px;">
+      <span class="lbl">Notes</span>
+      <div class="field" style="height: 232px; padding: 14px 16px; border: 1px solid #d9d2c6; font-size: 14px; line-height: 1.62; color: #4a443b; overflow: hidden;">Supervised learning is one of the most fundamental concepts in machine learning. It is a learning approach where a model is trained using labeled data, meaning every input has a corresponding correct output…</div>
+      <div class="field" style="display: flex; align-items: center; justify-content: space-between; height: 46px; padding: 0 16px; font-size: 14px; color: #6d6559;">
+        <span>Upload .md or .txt</span><span class="mono" style="font-size: 15px;">+</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px; padding-top: 4px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 14.5px;">Max chunks</span>
+          <div class="field mono" style="width: 74px; height: 38px; display: flex; align-items: center; justify-content: center; font-size: 15px;">5</div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 14.5px;">Remove near-duplicates</span>
+          <div style="width: 42px; height: 24px; border-radius: 12px; background: #a63d2f; display: flex; align-items: center; justify-content: flex-end; padding: 3px;">
+            <div style="width: 18px; height: 18px; border-radius: 9px; background: #fffdfa;"></div>
+          </div>
+        </div>
+      </div>
+      <p style="margin: 2px 0 0; font-size: 12.5px; line-height: 1.5; color: #8c8578;">Free tier allows <span class="mono" style="color: #6d6559;">5</span> requests a minute. Higher values wait between calls.</p>
+      <div style="display: flex; flex-direction: column; gap: 9px; padding-top: 4px;">
+        <div class="btn" style="height: 44px; border: 1px solid #23201c; background: transparent; color: #23201c;">Preview <span class="mono" style="font-size: 11px; color: #6d6559;">free</span></div>
+        <div class="btn" style="height:48px;background:#23201c;color:#faf7f2;font-weight:500">Generate</div>
+      </div>
+      
+    </div>
+<div style="flex: 1 1 0; min-width: 0;"><div style="border:1px solid #d9d2c6;background:#fffdfa;border-radius:2px;overflow:hidden"><div style="padding:16px 20px 0"><span class="lbl">Estimate</span></div><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:14px 20px 20px"><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:38px;font-weight:600;line-height:1;letter-spacing:-0.02em">3</span><span class="lbl">chunks</span></div><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:38px;font-weight:600;line-height:1;letter-spacing:-0.02em">3</span><span class="lbl">requests</span></div><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:38px;font-weight:600;line-height:1;letter-spacing:-0.02em">758</span><span class="lbl">tokens approx</span></div></div><div style="display:flex;align-items:center;gap:10px;padding:14px 20px;background:#f2f5ee;border-top:1px solid #dfe5d8"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4f7a48" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg><span style="font-size:14px;color:#3f5c3a">No API calls were made.</span></div></div><p style="margin:12px 2px 0;font-size:13px;line-height:1.55;color:#8c8578">Token count is estimated locally at four characters per token, not measured by the API.</p></div></div></div>
+</x-dc>
+</body>
+</html>
