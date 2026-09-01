@@ -104,6 +104,19 @@ call, and `--dry-run` must not make one.
 **Free tier is 5 RPM on `gemini-2.5-flash`**, measured — the API rejects the 6th
 call in a minute reporting `quotaValue: 5`, not the widely quoted 15.
 
+## Design
+
+Three canvases, none of them needed to run the app:
+
+| Folder | What it holds |
+|---|---|
+| `design-directions/` | The current Ruled Paper design: nine screens plus the flip-card anatomy. `build_screens.py` generates them from one definition. |
+| `design-motion/` | The drifting-ledger ground and card motion, as living artboards. |
+| `design/` | Retired. A pointer saying the old dark layout was superseded. |
+
+The folder names predate what they ended up holding; `design-directions/` is the
+current design, not a set of options.
+
 ## Tests
 
 ```powershell

@@ -1,7 +1,8 @@
 # Project: Flashcard Generator
 
 Converts study notes (Markdown/text) into Anki-importable flashcards
-using the Gemini API. CLI tool, no web UI.
+using the Gemini API. Two front ends over one pipeline: a Typer CLI, and a
+Gradio website in `app.py` served in a browser.
 
 ## Environment
 
@@ -18,7 +19,7 @@ using the Gemini API. CLI tool, no web UI.
 
 - `google-genai` SDK, Pydantic v2, Typer, python-dotenv, pytest
 - `sentence-transformers` for local deduplication only
-- `gradio` for the mobile front end in `app.py` only. The CLI must keep working
+- `gradio` for the website front end in `app.py` only. The CLI must keep working
   without it, and no pipeline module may import it.
 - NOT allowed: LangChain, LlamaIndex, any vector database, any other web
   framework
