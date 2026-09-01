@@ -31,6 +31,9 @@ class FakeClient:
         self.request_count = 0
         self.cache_hits = 0
         self.cache_flags: list[bool] = []
+        # The benchmark reads this instead of timing the outer call, which would
+        # include rate-limiter and backoff sleeps.
+        self.last_call_seconds = 0.25
 
     def generate_cards(self, prompt: str, use_cache: bool = True) -> list[Flashcard]:
         self.cache_flags.append(use_cache)
@@ -133,3 +136,33 @@ def test_empty_arm_reports_zero_not_a_crash() -> None:
     assert arm.runs == 0
     assert arm.failure_rate == 0.0
     assert arm.mean_latency == 0.0
+
+
+def test_fenced_replies_are_detected() -> None:
+    from flashcards.benchmark import was_fenced
+
+    assert was_fenced('```json\n[{"a": 1}]\n```')
+    assert was_fenced('```\n[{"a": 1}]\n```')
+    assert not was_fenced('[{"a": 1}]')
+
+
+def test_fenced_json_still_parses() -> None:
+    from flashcards.benchmark import parse_cards
+
+    cards = parse_cards(
+        '```json\n[{"question": "Q?", "answer": "An answer here.", '
+        '"topic": "T", "difficulty": "easy"}]\n```'
+    )
+    assert len(cards) == 1 and cards[0].question == "Q?"
+
+
+def test_latency_excludes_throttling(settings: Settings) -> None:
+    """The arm records the client's own call time, not the wrapper's wall time.
+
+    Timing generate_cards would fold in the rate limiter's sleep, which is how
+    a 3.2s call came out as 8.8s once the bucket was empty.
+    """
+    client = FakeClient(text=json.dumps([CARD_JSON]))
+    client.last_call_seconds = 0.4
+    for arm in benchmark.run([chunk(0)], settings, client):
+        assert arm.latencies == [0.4]

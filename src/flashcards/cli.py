@@ -130,6 +130,13 @@ def benchmark(
             typer.secho(f"{arm.name}: {failure}", fg=typer.colors.RED)
 
     typer.echo(f"\ncards produced: {' / '.join(str(a.cards) for a in arms)}")
+    # Without this the control arm's failure rate reads as "the model always
+    # returned clean JSON" when it may mean the harness cleaned up after it.
+    prompt_arm = arms[1]
+    typer.echo(
+        f"code fences stripped: {prompt_arm.fenced} of {prompt_arm.runs} "
+        "prompt-based replies"
+    )
     typer.echo(f"requests: {client.request_count}")
 
 

@@ -93,6 +93,7 @@ class GeminiClient:
         self._bucket = TokenBucket(settings.requests_per_minute)
         self._request_count = 0
         self._cache_hits = 0
+        self._last_call_seconds = 0.0
 
     @property
     def request_count(self) -> int:
@@ -101,6 +102,16 @@ class GeminiClient:
     @property
     def cache_hits(self) -> int:
         return self._cache_hits
+
+    @property
+    def last_call_seconds(self) -> float:
+        """Wall time of the last HTTP call alone.
+
+        Timed here rather than around generate_cards, which also blocks on
+        the rate limiter and on retry backoff. Measuring the outer call made
+        the benchmark report throttling as model latency.
+        """
+        return self._last_call_seconds
 
     def _generation_config(self) -> types.GenerateContentConfig:
         return types.GenerateContentConfig(
@@ -156,12 +167,15 @@ class GeminiClient:
         for attempt in range(self._settings.max_attempts):
             self._bucket.acquire()
             self._request_count += 1
+            started = time.perf_counter()
             try:
-                return self._client.models.generate_content(
+                response = self._client.models.generate_content(
                     model=self._settings.model_id,
                     contents=prompt,
                     config=config,
                 )
+                self._last_call_seconds = time.perf_counter() - started
+                return response
             except errors.APIError as exc:
                 if (
                     exc.code not in RETRY_CODES
