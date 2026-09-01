@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #faf7f2; color: #23201c;
+           font-family: 'Newsreader', Georgia, serif; }
+    a { color: #2c4a6b; } a:hover { color: #213952; }
+    .lbl { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10.5px;
+           letter-spacing: .12em; text-transform: uppercase; color: #8c8578; }
+    .stage { position: relative; width: 620px; height: 300px; overflow: hidden;
+             background: #faf7f2; border: 1px solid #d9d2c6; border-radius: 2px; }
+    /* Engineering-pad grid, panning diagonally. Structure instead of atmosphere. */
+    .grid { position: absolute; inset: -80px;
+            background-image:
+              repeating-linear-gradient(to right, rgba(35,32,28,.055) 0 1px, transparent 1px 24px),
+              repeating-linear-gradient(to bottom, rgba(35,32,28,.055) 0 1px, transparent 1px 24px);
+            animation: pan 26s linear infinite; }
+    .grid-major { position: absolute; inset: -80px;
+            background-image:
+              repeating-linear-gradient(to right, rgba(44,74,107,.10) 0 1px, transparent 1px 120px),
+              repeating-linear-gradient(to bottom, rgba(44,74,107,.10) 0 1px, transparent 1px 120px);
+            animation: pan 26s linear infinite; }
+    @keyframes pan { to { transform: translate(24px, 24px); } }
+    /* One slow highlight passing over the grid, so it is not entirely static in feel. */
+    .pass { position: absolute; inset: 0;
+            background: linear-gradient(118deg, transparent 40%, rgba(255,255,255,.55) 50%, transparent 60%);
+            transform: translateX(-100%); animation: pass 11s ease-in-out infinite; }
+    @keyframes pass { 0%,10% { transform: translateX(-100%); } 60%,100% { transform: translateX(100%); } }
+    @media (prefers-reduced-motion: reduce) {
+      .grid, .grid-major, .pass { animation: none !important; }
+    }
+  </style>
+</helmet>
+
+<div style="width: 620px; background: #faf7f2; padding: 22px 22px 24px; display: flex; flex-direction: column; gap: 14px;">
+  <span class="lbl">Alternate ground &middot; Graph drift</span>
+  <div class="stage">
+    <div class="grid"></div>
+    <div class="grid-major"></div>
+    <div class="pass"></div>
+  </div>
+  <p style="margin: 0; font-size: 14px; line-height: 1.55; color: #4a443b;">Engineering-pad grid panning diagonally, with a major rule every fifth line and one slow highlight crossing it. Structure rather than atmosphere.</p>
+  <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #8c8578;">Tradeoff: a moving grid behind ruled cards competes with them, and fine grid lines are where cheap screens show banding.</p>
+</div>
+</x-dc>
+</body>
+</html>

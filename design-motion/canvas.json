@@ -1,0 +1,17 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",            "x": 0,    "y": 0,    "w": 1280, "h": 900 },
+    { "file": "CardEffects.dc.html",     "x": 1400, "y": 0,    "w": 1180, "h": 700 },
+    { "file": "GroundInkWash.dc.html",   "x": 0,    "y": 1060, "w": 620,  "h": 430 },
+    { "file": "GroundGraphDrift.dc.html","x": 720,  "y": 1060, "w": 620,  "h": 430 }
+  ],
+  "annotations": [
+    { "id": "lead", "x": 0, "y": -170, "w": 1280,
+      "text": "DRIFTING LEDGER — the direction built out. Three layers on the paper: ruled lines creeping upward, three soft ink blooms drifting on 30-38s cycles, and a grain sheet shifting on its own axis. Cards deal in with a tilt and turn on a loop with a sheen. Everything loops live here, so let it run." },
+    { "id": "note-cards", "x": 1400, "y": -170, "w": 1180,
+      "text": "The three card effects isolated and looping: deal-in, turn with sheen, and the hover state. Motion sits on the card chrome and the ground, never behind answer text." },
+    { "id": "note-alts", "x": 0, "y": 950, "w": 1340,
+      "text": "Two louder grounds beside the deliverable, each with its honest tradeoff. Both are more visible than the lead — which is the point of showing them rather than describing them." }
+  ],
+  "launch": { "view": "canvas" }
+}

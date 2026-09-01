@@ -78,7 +78,9 @@ body {{
 /* Padding lives on the container only. Setting it on body as well subtracted
    112px twice and the page came out 1068 wide instead of 1180. */
 .gradio-container {{
-  background: {PAPER} !important;
+  /* transparent, not paper: the animated ground is a fixed layer behind this,
+     and a solid container background would paint straight over it. */
+  background: transparent !important;
   font-family: {SERIF} !important;
   color: {INK} !important;
   box-sizing: border-box !important;
@@ -86,7 +88,46 @@ body {{
   max-width: 1180px !important;
   margin: 0 auto !important;
   padding: 0 56px 56px !important;
+  position: relative !important;
+  z-index: 1 !important;
 }}
+
+/* --- drifting ledger: the animated ground ------------------------------- */
+#ground {{
+  position: fixed !important; inset: 0 !important;
+  z-index: 0 !important; pointer-events: none !important;
+  overflow: hidden !important; margin: 0 !important; padding: 0 !important;
+  /* The grain multiplies, so the layer needs its own paper to composite
+     against. Without this it multiplies the whole page down to near-black. */
+  background: {PAPER} !important;
+}}
+#ground .bloom {{ position: absolute; border-radius: 50%; filter: blur(70px); }}
+#ground .b1 {{ width: 560px; height: 560px; left: -160px; top: -180px;
+  background: rgba(44,74,107,.13); animation: drift-a 30s ease-in-out infinite alternate; }}
+#ground .b2 {{ width: 480px; height: 480px; right: -170px; top: 150px;
+  background: rgba(91,117,83,.13); animation: drift-b 38s ease-in-out infinite alternate; }}
+#ground .b3 {{ width: 440px; height: 440px; left: 42%; bottom: -200px;
+  background: rgba(156,53,32,.09); animation: drift-c 34s ease-in-out infinite alternate; }}
+@keyframes drift-a {{ to {{ transform: translate(90px, 60px) scale(1.12); }} }}
+@keyframes drift-b {{ to {{ transform: translate(-70px, -50px) scale(1.08); }} }}
+@keyframes drift-c {{ to {{ transform: translate(60px, -70px) scale(1.14); }} }}
+
+#ground .rules {{ position: absolute; left: 0; right: 0; top: -60px; bottom: -60px;
+  background-image: repeating-linear-gradient(
+    transparent 0 27px, rgba(35,32,28,.05) 27px 28px);
+  animation: creep 90s linear infinite; }}
+@keyframes creep {{ to {{ transform: translateY(-28px); }} }}
+
+#ground .grain {{ position: absolute; inset: -60px; opacity: .14;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
+  animation: grain-shift 8s steps(6) infinite; }}
+@keyframes grain-shift {{
+  0% {{ transform: translate(0, 0); }} 50% {{ transform: translate(-14px, 9px); }}
+  100% {{ transform: translate(7px, -11px); }}
+}}
+#groundwrap {{ height: 0 !important; margin: 0 !important; padding: 0 !important;
+               overflow: visible !important; }}
 #upload {{ overflow: hidden !important; }}
 footer, .show-api, .built-with {{ display: none !important; }}
 .gradio-container .wrap.hide {{ display: none !important; }}
@@ -272,7 +313,17 @@ footer, .show-api, .built-with {{ display: none !important; }}
   transform-style: preserve-3d;
   transition: transform .6s cubic-bezier(.2,.75,.2,1);
 }}
-.fc input:checked ~ .fc-inner {{ transform: rotateY(180deg); }}
+.fc input:checked ~ .fc-pop .fc-inner {{ transform: rotateY(180deg); }}
+/* The rise at the halfway point cannot be a transition -- transitions run
+   monotonically between two values. It is a keyframe on a wrapper, applied only
+   while checked; unchecking drops the animation, and since the keyframe ends at
+   scale(1) there is nothing to snap back from. */
+.fc-pop {{ width: 100%; height: 100%; transform-style: preserve-3d; }}
+.fc input:checked ~ .fc-pop {{ animation: fc-pop .62s cubic-bezier(.2,.75,.2,1); }}
+@keyframes fc-pop {{
+  0% {{ transform: scale(1); }} 50% {{ transform: scale(1.07); }}
+  100% {{ transform: scale(1); }}
+}}
 .fc-face {{
   grid-area: 1 / 1;
   backface-visibility: hidden; -webkit-backface-visibility: hidden;
@@ -281,13 +332,24 @@ footer, .show-api, .built-with {{ display: none !important; }}
   border-radius: 2px;
   padding: 16px 18px;
   display: flex; flex-direction: column; gap: 11px;
-  transition: box-shadow .25s ease;
+  overflow: hidden;
+  transition: box-shadow .25s ease, border-color .25s ease;
 }}
+/* A light band crosses the face on hover and again while it turns. */
+.fc-face::after {{
+  content: ""; position: absolute; inset: -40%; pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%,
+    rgba(255,255,255,.62) 50%, transparent 60%);
+  transform: translateX(-130%);
+}}
+.fc:hover .fc-face::after {{ animation: fc-sheen 1.05s ease; }}
+.fc input:checked ~ .fc-pop .fc-face::after {{ animation: fc-sheen .62s ease; }}
+@keyframes fc-sheen {{ to {{ transform: translateX(130%); }} }}
 .fc:hover .fc-face {{
   box-shadow: 0 8px 22px rgba(35,32,28,.10);
   border-color: {MUTE};
 }}
-.fc input:focus-visible ~ .fc-inner .fc-face {{
+.fc input:focus-visible ~ .fc-pop .fc-face {{
   outline: 2px solid {ACCENT}; outline-offset: 2px;
 }}
 /* The affordance answers back. Without this the card lifts but the thing that
@@ -296,9 +358,9 @@ footer, .show-api, .built-with {{ display: none !important; }}
 .flip-hint {{ transition: color .2s ease; }}
 .flip-hint svg {{ transition: transform .45s cubic-bezier(.2,.8,.2,1); }}
 .fc:hover .flip-hint,
-.fc input:focus-visible ~ .fc-inner .flip-hint {{ color: {INK} !important; }}
+.fc input:focus-visible ~ .fc-pop .flip-hint {{ color: {INK} !important; }}
 .fc:hover .flip-hint svg,
-.fc input:focus-visible ~ .fc-inner .flip-hint svg {{ transform: rotate(-180deg); }}
+.fc input:focus-visible ~ .fc-pop .flip-hint svg {{ transform: rotate(-180deg); }}
 @media (prefers-reduced-motion: reduce) {{
   .flip-hint, .flip-hint svg {{ transition: none !important; }}
 }}
@@ -311,11 +373,13 @@ footer, .show-api, .built-with {{ display: none !important; }}
   background-position: 0 52px;
 }}
 @keyframes fc-in {{
-  from {{ opacity: 0; transform: translateY(10px); }}
+  from {{ opacity: 0; transform: translateY(26px) rotateX(-14deg) scale(.94); }}
   to {{ opacity: 1; transform: none; }}
 }}
 @media (prefers-reduced-motion: reduce) {{
-  .fc, .fc-inner, .fc-face {{ transition: none !important; animation: none !important; }}
+  .fc, .fc-inner, .fc-pop, .fc-face, .fc-face::after,
+  #ground .bloom, #ground .rules, #ground .grain {{
+    transition: none !important; animation: none !important; }}
 }}
 
 @media (max-width: 900px) {{
@@ -547,7 +611,7 @@ def render_cards(entries: list[SourcedCard]) -> str:
         delay = f"animation-delay:{min(index, 11) * 45}ms"
         blocks.append(
             f'<label class="fc" style="{delay}"><input type="checkbox">'
-            f'<div class="fc-inner">'
+            f'<div class="fc-pop"><div class="fc-inner">'
             f'<div class="fc-face" style="{edge}">'
             f"{_face_head(card, rule_colour)}"
             f'<p style="margin:0;font-size:18px;font-weight:500;line-height:1.36;color:{INK};'
@@ -559,7 +623,7 @@ def render_cards(entries: list[SourcedCard]) -> str:
             f"{_face_head(card, rule_colour, back=True)}"
             f'<p style="margin:0;font-size:15px;line-height:28px;color:{INK_2};'
             f'text-wrap:pretty;flex-grow:1">{_esc(card.answer)}</p></div>'
-            f"</div></label>"
+            f"</div></div></label>"
         )
     return (
         f'<div style="font-family:{SERIF};padding-top:22px;display:grid;'
@@ -810,7 +874,14 @@ def generate(
 
 # --- ui --------------------------------------------------------------------
 
+GROUND = (
+    '<div id="ground"><div class="rules"></div>'
+    '<div class="bloom b1"></div><div class="bloom b2"></div>'
+    '<div class="bloom b3"></div><div class="grain"></div></div>'
+)
+
 with gr.Blocks(title="Flashcards") as demo:
+    gr.HTML(GROUND, elem_id="groundwrap")
     gr.HTML(header_html())
 
     with gr.Row(elem_id="main"):

@@ -386,7 +386,7 @@ def test_flip_affordance_is_hoverable() -> None:
     # The card lifted on hover but the affordance stayed inert.
     assert 'class="flip-hint"' in app.render_cards([_sourced(_card())])
     assert ".fc:hover .flip-hint" in app.CSS
-    assert "focus-visible ~ .fc-inner .flip-hint" in app.CSS
+    assert "focus-visible ~ .fc-pop .flip-hint" in app.CSS
 
 
 def test_entrance_animation_does_not_pin_the_hover_lift() -> None:
@@ -395,3 +395,36 @@ def test_entrance_animation_does_not_pin_the_hover_lift() -> None:
     # `.fc:hover { transform: translateY(-3px) }` never took effect.
     assert "cubic-bezier(.2,.8,.2,1) backwards" in app.CSS
     assert "cubic-bezier(.2,.8,.2,1) both" not in app.CSS
+
+
+# --- drifting ledger -------------------------------------------------------
+
+
+def test_ground_layers_are_present_and_behind_the_page() -> None:
+    for layer in ("rules", "bloom b1", "bloom b2", "bloom b3", "grain"):
+        assert layer in app.GROUND
+    assert "#ground" in app.CSS and "z-index: 0" in app.CSS
+    # A solid container background would paint straight over the fixed layer.
+    assert "background: transparent !important" in app.CSS
+
+
+def test_flip_pop_only_runs_while_checked() -> None:
+    # Applied unconditionally it would replay on every page load; the keyframe
+    # ends at scale(1) so dropping it on uncheck is invisible.
+    assert "checked ~ .fc-pop { animation: fc-pop" in app.CSS
+    # not the unconditional form, which would fire on load
+    assert "\n.fc-pop { animation" not in app.CSS
+
+
+def test_cards_are_wrapped_for_the_pop() -> None:
+    rendered = app.render_cards([_sourced(_card())])
+    assert '<div class="fc-pop">' in rendered
+    assert rendered.count("</div></div></label>") == 1
+
+
+def test_every_animation_is_dropped_under_reduced_motion() -> None:
+    # There is more than one reduced-motion block; check across all of them.
+    blocks = "".join(app.CSS.split("prefers-reduced-motion")[1:])
+    for selector in ("#ground .bloom", "#ground .rules", "#ground .grain",
+                     ".fc-pop", ".fc-face::after"):
+        assert selector in blocks
