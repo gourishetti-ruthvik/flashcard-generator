@@ -12,6 +12,7 @@ from flashcards.client import (
     GeminiClient,
     GeminiError,
     TokenBucket,
+    is_daily_cap,
     retry_delay,
 )
 from flashcards.config import Settings, load_settings
@@ -348,3 +349,67 @@ def test_cache_hit_does_not_consume_a_token(settings: Settings, fake_api) -> Non
     for _ in range(settings.requests_per_minute * 3):
         client.generate_cards("prompt")
     assert client.request_count == 1
+
+# --- telling the daily cap apart from the minute window --------------------
+
+
+def _quota_error(quota_id: str, delay: str = "30s") -> errors.APIError:
+    return errors.APIError(
+        429,
+        {
+            "error": {
+                "code": 429,
+                "message": "You exceeded your current quota",
+                "status": "RESOURCE_EXHAUSTED",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                        "violations": [{"quotaId": quota_id, "quotaValue": "20"}],
+                    },
+                    {
+                        "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                        "retryDelay": delay,
+                    },
+                ],
+            }
+        },
+    )
+
+
+DAILY = "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+PER_MINUTE = "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+
+
+def test_daily_cap_is_recognised() -> None:
+    assert is_daily_cap(_quota_error(DAILY))
+
+
+def test_per_minute_quota_is_not_a_daily_cap() -> None:
+    assert not is_daily_cap(_quota_error(PER_MINUTE))
+
+
+def test_a_429_without_quota_details_is_not_a_daily_cap() -> None:
+    assert not is_daily_cap(errors.APIError(429, {"error": {"message": "busy"}}))
+
+
+def test_the_daily_cap_is_not_retried(settings: Settings, fake_api) -> None:
+    """Retrying it spends another of the 20 requests a day to learn nothing.
+
+    Its RetryInfo is misleading rather than merely unhelpful: measured live it
+    reported 52s, 6s, 19s, 33s, 46s and finally 0s across four minutes while
+    still refusing every call.
+    """
+    captured = fake_api([_quota_error(DAILY, delay="0s")])
+    with pytest.raises(errors.APIError):
+        GeminiClient(settings).generate_text("prompt")
+    assert len(captured["models"].calls) == 1
+
+
+def test_a_per_minute_quota_error_is_still_retried(
+    settings: Settings, fake_api
+) -> None:
+    # Waiting out the minute window is exactly what backoff is for.
+    captured = fake_api([_quota_error(PER_MINUTE, delay="0s")])
+    with pytest.raises(errors.APIError):
+        GeminiClient(settings).generate_text("prompt")
+    assert len(captured["models"].calls) == settings.max_attempts

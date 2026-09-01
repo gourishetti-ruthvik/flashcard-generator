@@ -138,7 +138,7 @@ current design, not a set of options.
 pytest
 ```
 
-193 tests, no network calls. The SDK client is stubbed and the embedding encoder
+198 tests, no network calls. The SDK client is stubbed and the embedding encoder
 is faked, so the suite runs offline in about 3 seconds.
 
 ## Benchmark results
@@ -188,6 +188,13 @@ of the arms.
 
 **Quota errors are kept out of the failure rate.** Running out of quota says
 nothing about whether an arm can produce valid JSON.
+
+**The daily cap is never retried.** The client tells it apart from the
+per-minute window by its `quotaId` and fails immediately. Its `RetryInfo` is
+actively misleading -- probed once a minute for four minutes it returned 52s,
+6s, 19s, 33s, 46s and finally 0s while refusing every call -- so backing off on
+that hint costs another of the 20 requests to learn nothing. The per-minute
+window is still retried, because waiting it out is what backoff is for.
 
 **Fenced replies are counted.** The control arm strips Markdown code fences
 before parsing, so without that count its 0% failure rate could equally mean

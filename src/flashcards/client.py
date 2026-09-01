@@ -44,6 +44,28 @@ def retry_delay(exc: errors.APIError) -> float | None:
     return None
 
 
+def is_daily_cap(exc: errors.APIError) -> bool:
+    """Is this the per-day quota rather than the per-minute one?
+
+    Worth telling apart because retrying is only ever useful for the minute
+    window. The daily cap does not reopen until it resets, and its RetryInfo is
+    not merely unhelpful but actively misleading: measured across four minutes
+    it returned 52s, 6s, 19s, 33s, 46s and finally 0s while still refusing every
+    call. Sleeping on that and retrying spends another of the 20 requests a day
+    to learn what the first one already said.
+    """
+    details = getattr(exc, "details", None)
+    if not isinstance(details, dict):
+        return False
+    for item in details.get("error", {}).get("details", []):
+        if not isinstance(item, dict):
+            continue
+        for violation in item.get("violations", []):
+            if "PerDay" in str(violation.get("quotaId", "")):
+                return True
+    return False
+
+
 def _finish_reason(response: types.GenerateContentResponse) -> str:
     candidates = response.candidates or []
     if not candidates:
@@ -180,6 +202,7 @@ class GeminiClient:
                 if (
                     exc.code not in RETRY_CODES
                     or attempt == self._settings.max_attempts - 1
+                    or is_daily_cap(exc)
                 ):
                     raise
                 # Full jitter rather than a fixed backoff: when several chunks
