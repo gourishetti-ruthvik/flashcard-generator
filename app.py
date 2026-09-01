@@ -97,15 +97,32 @@ footer, .show-api, .built-with {{ display: none !important; }}
   box-shadow: none !important;
 }}
 
-#main {{ gap: 44px !important; align-items: flex-start !important; }}
+/* Gradio nests the row inside four wrappers that each narrow it -- 985 down to
+   768 down to 704 -- so the results column was starved and two card columns
+   never fit. :has() widens only the chain containing our row, leaving every
+   other .wrap and .column (including #left and #right) alone. It also puts an
+   inline min-width:min(320px,100%) on Columns, which overrode the sidebar. */
+.gradio-container .main:has(#main),
+.gradio-container .wrap:has(#main),
+.gradio-container main.contain:has(#main),
+.gradio-container .column:has(> #main) {{
+  width: 100% !important;
+  max-width: none !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}}
+#main {{ gap: 44px !important; align-items: flex-start !important;
+        width: 100% !important; }}
 #left {{
-  flex: 0 0 320px !important;
+  flex: 0 0 280px !important;
+  min-width: 280px !important;
   position: sticky !important;
   top: 24px !important;
   max-height: calc(100vh - 48px) !important;
   overflow-y: auto !important;
 }}
-#right {{ flex: 1 1 0 !important; min-width: 0 !important; }}
+#right {{ flex: 1 1 0 !important; min-width: 0 !important;
+          width: auto !important; }}
 #left > *, #right > * {{ background: transparent !important; border: none !important; }}
 #left {{ gap: 0 !important; }}
 
@@ -232,7 +249,7 @@ footer, .show-api, .built-with {{ display: none !important; }}
    because the checkbox keeps focus and space toggles it. */
 .fc {{
   display: block;
-  height: 296px;
+  min-height: 200px;
   perspective: 1400px;
   cursor: pointer;
   transition: transform .25s ease;
@@ -240,21 +257,24 @@ footer, .show-api, .built-with {{ display: none !important; }}
 }}
 .fc:hover {{ transform: translateY(-3px); }}
 .fc input {{ position: absolute; opacity: 0; width: 0; height: 0; }}
+/* Both faces sit in the same grid cell rather than stacked with position
+   absolute. The cell is as tall as the taller face, so the card sizes itself
+   and no answer has to scroll inside a fixed box. */
 .fc-inner {{
-  position: relative; width: 100%; height: 100%;
+  display: grid;
+  width: 100%; height: 100%;
   transform-style: preserve-3d;
   transition: transform .6s cubic-bezier(.2,.75,.2,1);
 }}
 .fc input:checked ~ .fc-inner {{ transform: rotateY(180deg); }}
 .fc-face {{
-  position: absolute; inset: 0;
+  grid-area: 1 / 1;
   backface-visibility: hidden; -webkit-backface-visibility: hidden;
   background: {CARD_BG};
   border: 1px solid {RULE};
   border-radius: 2px;
   padding: 16px 18px;
   display: flex; flex-direction: column; gap: 11px;
-  overflow: hidden;
   transition: box-shadow .25s ease;
 }}
 .fc:hover .fc-face {{ box-shadow: 0 8px 22px rgba(35,32,28,.10); }}
@@ -516,13 +536,13 @@ def render_cards(entries: list[SourcedCard]) -> str:
             f'<div class="fc-face fc-back" style="{edge}">'
             f"{_face_head(card, rule_colour, back=True)}"
             f'<p style="margin:0;font-size:15px;line-height:28px;color:{INK_2};'
-            f'text-wrap:pretty;flex-grow:1;overflow-y:auto">{_esc(card.answer)}</p></div>'
+            f'text-wrap:pretty;flex-grow:1">{_esc(card.answer)}</p></div>'
             f"</div></label>"
         )
     return (
         f'<div style="font-family:{SERIF};padding-top:22px;display:grid;'
-        f"grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;"
-        f'align-items:start">{"".join(blocks)}</div>'
+        f"grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px;"
+        f'align-items:stretch">{"".join(blocks)}</div>'
     )
 
 

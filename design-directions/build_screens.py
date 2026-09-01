@@ -151,9 +151,11 @@ RULED = (
     "background-position:0 52px;"
 )
 
+# Content-driven, not a fixed box: the app stacks both faces in one grid cell,
+# so a card is as tall as its taller face and no answer scrolls inside it.
 FACE = (
-    f"height:296px;background:{CARD_BG};border:1px solid {RULE};border-radius:2px;"
-    "padding:16px 18px;display:flex;flex-direction:column;gap:11px;overflow:hidden;"
+    f"min-height:220px;height:100%;background:{CARD_BG};border:1px solid {RULE};"
+    "border-radius:2px;padding:16px 18px;display:flex;flex-direction:column;gap:11px;"
 )
 
 
@@ -225,7 +227,7 @@ CARD_DATA = [
 def grid(cards_html: str, columns: int = 2) -> str:
     return (
         f'<div style="display:grid;grid-template-columns:repeat({columns},minmax(0,1fr));'
-        f'gap:18px;padding-top:22px;align-items:start">{cards_html}</div>'
+        f'gap:18px;padding-top:22px;align-items:stretch">{cards_html}</div>'
     )
 
 
@@ -361,8 +363,9 @@ def anatomy() -> str:
         f'gap:36px;padding-top:26px">{cells}</div>'
         f'<p style="margin:30px 0 0;font-size:14.5px;line-height:1.6;color:{INK_3};max-width:640px">'
         "The flip is a hidden checkbox driving a rotateY, so it needs no JavaScript and "
-        "stays keyboard-operable. Cards are a fixed 296px because the back is absolutely "
-        "positioned. Hover lifts the card 3px; entrance is staggered 45ms per card. All "
+        "stays keyboard-operable. Both faces share one grid cell, so a card is as tall "
+        "as its taller face and no answer scrolls inside a box. Hover lifts the card "
+        "3px; entrance is staggered 45ms per card. All "
         "motion is dropped under prefers-reduced-motion, where the flip still works.</p>"
     )
 
