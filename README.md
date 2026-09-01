@@ -132,7 +132,32 @@ is faked, so the suite runs offline in about 3 seconds.
 prompt-based JSON instructions, reporting parse-failure rate and mean latency
 per arm. Both arms bypass the cache, so it costs `chunks x 2` fresh calls.
 
-**Results are not yet recorded.** Every attempted run so far exhausted the free
-tier's quota and spent its time in 429 backoff rather than producing numbers.
-This section should be filled in from a real run once quota allows — writing
-plausible-looking figures here would defeat the point of measuring.
+Run over `notes/` on 2026-09-01, `gemini-2.5-flash`, 3 chunks per arm:
+
+| Arm | Runs | Failed | Rate | Mean latency |
+|---|---|---|---|---|
+| JSON mode (`response_schema`) | 3 | 0 | 0% | 3.19s |
+| Prompt-based JSON instructions | 3 | 0 | 0% | 3.25s |
+
+Cards produced: 14 (JSON mode) against 13 (prompt-based). Six requests total.
+
+**This does not show that JSON mode is unnecessary, and it is too small to show
+much at all.** Three chunks per arm cannot distinguish a 0% failure rate from a
+5% one, and the 0.06s latency gap is well inside the noise of two samples of
+three. What it does say is that on short, clean prose the unconstrained model
+returned parseable JSON every time -- the failure mode JSON mode protects
+against did not appear at this size.
+
+Two things make the control arm look better than a naive prompt would:
+
+- It strips Markdown code fences before parsing, because unconstrained models
+  wrap JSON in them regularly and any real implementation would strip them.
+  How many of the three replies needed that is not instrumented, so the 0%
+  cannot be read as "the model never fenced its output".
+- The prompt spells out the exact key names and the allowed `difficulty`
+  values, which is most of what the schema enforces.
+
+JSON mode stays the default: it moves the guarantee from a prompt the model may
+ignore to a constraint applied at decode time, and it costs nothing measurable
+here. The honest summary is that this run found no reason to prefer either, on a
+sample too small to find one.
