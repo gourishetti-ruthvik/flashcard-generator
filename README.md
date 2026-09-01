@@ -138,7 +138,7 @@ current design, not a set of options.
 pytest
 ```
 
-175 tests, no network calls. The SDK client is stubbed and the embedding encoder
+193 tests, no network calls. The SDK client is stubbed and the embedding encoder
 is faked, so the suite runs offline in about 3 seconds.
 
 ## Benchmark results
@@ -148,36 +148,70 @@ prompt-based JSON instructions, reporting parse-failure rate and mean latency
 per arm. Both arms bypass the cache, so it costs `chunks x 2 x repeats` fresh
 calls.
 
-Run over `notes/` on 2026-09-01, `gemini-2.5-flash`, `--repeats 5`:
+### Sizing a run
 
-| Arm | Runs | Failed | Rate | Mean latency |
-|---|---|---|---|---|
-| JSON mode (`response_schema`) | 9 | 0 | 0% | 8.81s |
-| Prompt-based JSON instructions | 6 | 0 | 0% | 7.36s |
+The free tier allows **20 requests per day**. That is the whole design
+constraint:
 
-Cards produced: 40 against 26. Code fences stripped: **0 of 6** prompt-based
-replies. 75 requests were spent to land those 15 runs.
+| Run | Calls | Fits in a day? |
+|---|---|---|
+| 3 chunks, `--repeats 1` | 6 | yes, comfortably |
+| 3 chunks, `--repeats 3` | 18 | yes — the largest that fits |
+| 3 chunks, `--repeats 5` | 30 | **no** |
 
-**Neither arm failed to parse, and the control arm needed no cleaning up after.**
-That last number answers the caveat from the first run: the prompt-based arm's
-0% is not an artefact of a lenient parser, because the model never fenced its
-output. On short, clean prose it returns valid JSON to a well-specified prompt.
+The 30-call version was attempted three times and never finished. It cannot:
+the cap stops it at 20, and retries count too. Nine runs per arm from
+`--repeats 3` is the most one day can buy.
 
-Three things stop this being a clean result:
+### Running it across days
 
-- **30 calls were requested and 15 landed.** The rest exhausted quota and were
-  counted as API errors, deliberately kept out of the failure rate -- running out
-  of quota says nothing about whether an arm can produce JSON. 75 requests for 15
-  runs is the retry overhead.
-- **The latency figures include throttling.** The timer wrapped the whole call,
-  which blocks on the rate limiter and on backoff, so 8.81s is mostly waiting.
-  This is fixed -- the client now exposes `last_call_seconds` for the HTTP call
-  alone -- but the numbers above were measured before the fix and are not
-  comparable to the 3.19s / 3.25s of the earlier 3-run pass.
-- **The arms saw different sample sizes** (9 against 6), because quota ran out
-  mid-run rather than evenly.
+```powershell
+flashcards benchmark notes/ --repeats 3
+flashcards benchmark notes/ --repeats 3 --resume
+```
 
-JSON mode stays the default: it moves the guarantee from a prompt the model may
-ignore to a constraint applied at decode time. This run gives no evidence it is
-faster or more reliable on inputs like these -- it gives evidence that on inputs
-like these, the guarantee is not the thing doing the work.
+The first command runs until quota stops it. Every completed call is already on
+disk, so the second picks up exactly where it left off — the next day if need
+be. Quota errors are not recorded, so `--resume` retries the calls that were
+refused rather than skipping them.
+
+### Method notes worth knowing
+
+**Latency is the HTTP call alone.** The client exposes `last_call_seconds`.
+Timing the wrapper instead folds in the rate limiter and backoff sleeps, which
+is how a 3.2s call was once reported as 8.8s.
+
+**The arms are interleaved and alternate which one leads.** Running every schema
+call before every prompt call gives the first arm all the available quota; that
+is what produced an earlier lopsided 9-vs-6 sample that looked like a property
+of the arms.
+
+**Quota errors are kept out of the failure rate.** Running out of quota says
+nothing about whether an arm can produce valid JSON.
+
+**Fenced replies are counted.** The control arm strips Markdown code fences
+before parsing, so without that count its 0% failure rate could equally mean
+"the model always returned clean JSON" or "the harness cleaned up every time".
+
+### Results
+
+Measurement in progress. Earlier passes are recorded here only so the numbers
+are not mistaken for a finished result:
+
+| Pass | Arm | Runs | Failed | Mean latency | Usable? |
+|---|---|---|---|---|---|
+| 3 chunks, 1 repeat | JSON mode | 3 | 0 | 3.19s | n too small |
+| 3 chunks, 1 repeat | Prompt-based | 3 | 0 | 3.25s | n too small |
+| `--repeats 5` | JSON mode | 9 | 0 | 8.81s | no — timer included throttling |
+| `--repeats 5` | Prompt-based | 6 | 0 | 7.36s | no — same, and biased by call order |
+| single call, timer fixed | JSON mode | 1 | 0 | 3.01s | consistent with the 3.19s above |
+
+**No parse failure has been observed in any arm**, and **0 of 6** prompt-based
+replies needed a fence stripped. That is the substantive finding so far: on
+short, clean prose, a well-specified prompt returns valid JSON without the
+schema, so the schema's guarantee is not what is doing the work. What is still
+missing is a latency comparison at a sample size worth quoting.
+
+JSON mode stays the default regardless: it moves the guarantee from a prompt the
+model may ignore to a constraint applied at decode time. The cost of being wrong
+about a prompt is a failed chunk; the cost of the schema is nothing measurable.
