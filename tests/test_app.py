@@ -326,3 +326,49 @@ def test_entrance_is_staggered_then_capped() -> None:
     # Capped so the last card of a long run does not wait half a second.
     assert "animation-delay:495ms" in rendered
     assert "animation-delay:540ms" not in rendered
+
+
+# --- palette ---------------------------------------------------------------
+
+
+def _luminance(colour: str) -> float:
+    def channel(value: int) -> float:
+        c = value / 255
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    r, g, b = (int(colour[i : i + 2], 16) for i in (1, 3, 5))
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+
+
+def _contrast(foreground: str, background: str) -> float:
+    a, b = _luminance(foreground), _luminance(background)
+    return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+
+
+def _hue(colour: str) -> float:
+    import colorsys
+
+    r, g, b = (int(colour[i : i + 2], 16) / 255 for i in (1, 3, 5))
+    return colorsys.rgb_to_hls(r, g, b)[0] * 360
+
+
+@pytest.mark.parametrize("level", ["easy", "medium", "hard"])
+def test_difficulty_colour_clears_wcag_aa(level: str) -> None:
+    # The label sits at 10.5px, so AA for normal text is the bar. Medium used to
+    # sit at 2.89 and was genuinely hard to read.
+    colour = app.DIFFICULTY[level][0]
+    assert _contrast(colour, app.CARD_BG) >= 4.5
+
+
+def test_difficulty_levels_are_distinguishable_by_hue() -> None:
+    # easy and hard were once three degrees apart, which is the same colour to
+    # the eye. Squares carry the level, but the edge should not actively mislead.
+    hues = [_hue(app.DIFFICULTY[level][0]) for level in ("easy", "medium", "hard")]
+    assert abs(hues[0] - hues[1]) >= 20
+    assert abs(hues[1] - hues[2]) >= 20
+
+
+def test_action_colour_is_not_a_difficulty_colour() -> None:
+    # Otherwise a card's edge reads as a button.
+    assert app.ACCENT not in {colour for colour, _ in app.DIFFICULTY.values()}
+    assert min(abs(_hue(app.ACCENT) - _hue(c)) for c, _ in app.DIFFICULTY.values()) >= 40

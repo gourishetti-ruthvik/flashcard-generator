@@ -39,13 +39,21 @@ RULE = "#d9d2c6"
 RULE_2 = "#e6e0d5"
 MUTE = "#8c8578"
 FAINT = "#a49c8f"
-RED = "#a63d2f"
-AMBER = "#c98a2e"
-OX = "#8c3b2a"
-GREEN = "#4f7a48"
+# Difficulty is a sequential ramp, cool to hot, and every step clears WCAG AA
+# on the card ground (5.03, 5.32, 7.03). The previous easy and hard were three
+# degrees apart in hue -- the same colour to the eye -- and medium sat at 2.89,
+# unreadable at the 10.5px label size.
+SAGE = "#5b7553"
+OCHRE = "#8f6116"
+OXBLOOD = "#9c3520"
+
+# Actions are a separate hue entirely, so an "easy" card's edge never reads as a
+# button. Blue ink on ruled paper is also what the metaphor wants.
+ACCENT = "#2c4a6b"
+GREEN = SAGE
 
 # level -> (margin-rule colour, filled squares)
-DIFFICULTY = {"easy": (RED, 1), "medium": (AMBER, 2), "hard": (OX, 3)}
+DIFFICULTY = {"easy": (SAGE, 1), "medium": (OCHRE, 2), "hard": (OXBLOOD, 3)}
 
 SERIF = "'Newsreader', Georgia, serif"
 MONO = "'IBM Plex Mono', ui-monospace, monospace"
@@ -181,7 +189,7 @@ footer, .show-api, .built-with {{ display: none !important; }}
   width: 18px; height: 18px; border-radius: 9px; background: {CARD_BG};
   transition: transform .15s ease;
 }}
-#dedupe input[type="checkbox"]:checked {{ background: {RED} !important; }}
+#dedupe input[type="checkbox"]:checked {{ background: {ACCENT} !important; }}
 #dedupe input[type="checkbox"]:checked::after {{ transform: translateX(18px); }}
 
 /* buttons */
@@ -208,7 +216,7 @@ footer, .show-api, .built-with {{ display: none !important; }}
   font-weight: 500 !important;
 }}
 #dlbtn {{
-  background: {RED} !important;
+  background: {ACCENT} !important;
   border: none !important;
   color: {CARD_BG} !important;
   min-height: 44px !important;
@@ -217,7 +225,7 @@ footer, .show-api, .built-with {{ display: none !important; }}
   letter-spacing: .04em !important;
 }}
 #genbtn:hover {{ background: #3a352e !important; }}
-#dlbtn:hover {{ background: #8c3327 !important; }}
+#dlbtn:hover {{ background: #213952 !important; }}
 
 /* Flip cards. A hidden checkbox inside the label drives a 3D rotation, so the
    whole thing is CSS: no JavaScript, and the card stays keyboard-operable
@@ -251,7 +259,7 @@ footer, .show-api, .built-with {{ display: none !important; }}
 }}
 .fc:hover .fc-face {{ box-shadow: 0 8px 22px rgba(35,32,28,.10); }}
 .fc input:focus-visible ~ .fc-inner .fc-face {{
-  outline: 2px solid {RED}; outline-offset: 2px;
+  outline: 2px solid {ACCENT}; outline-offset: 2px;
 }}
 /* The reverse of an index card is ruled. Line-height matches the rule pitch so
    the answer sits on the lines. */
@@ -373,7 +381,7 @@ def render_error(title: str, code: str, detail: str, steps: tuple[str, ...] = ()
         items = "".join(
             f'<div style="display:flex;align-items:center;gap:14px;min-height:52px;'
             f'padding:10px 4px;border-bottom:1px solid {RULE_2}">'
-            f'<span style="font-family:{MONO};font-size:14px;color:{RED};width:16px">{index}</span>'
+            f'<span style="font-family:{MONO};font-size:14px;color:{ACCENT};width:16px">{index}</span>'
             f'<span style="font-size:14.5px;color:{INK_2}">{step}</span></div>'
             for index, step in enumerate(steps, 1)
         )
@@ -383,7 +391,7 @@ def render_error(title: str, code: str, detail: str, steps: tuple[str, ...] = ()
         )
     return (
         f'<div style="font-family:{SERIF}">'
-        f'<div style="border:1px solid {RULE};border-left:3px solid {RED};background:#fbf1ee;'
+        f'<div style="border:1px solid {RULE};border-left:3px solid {ACCENT};background:#fbf0ed;'
         f'border-radius:2px;padding:16px 20px;display:flex;flex-direction:column;gap:7px">'
         f'<div style="display:flex;align-items:baseline;gap:10px">'
         f'<span style="font-size:18px;font-weight:600;color:{INK}">{_esc(title)}</span>{code_html}</div>'
@@ -398,7 +406,7 @@ _TICK = (
     '<path d="M20 6L9 17l-5-5"></path></svg>'
 )
 _RING = (
-    f'<span style="width:14px;height:14px;border:2px solid {RED};'
+    f'<span style="width:14px;height:14px;border:2px solid {ACCENT};'
     f'border-right-color:{RULE};border-radius:50%;display:inline-block"></span>'
 )
 _DOT = (
@@ -438,7 +446,7 @@ def render_stages(stages: list[tuple[str, str, str, str]], done: int, total: int
         f'<span style="font-family:{MONO};font-size:11.5px;color:{INK_3}">'
         f"step {done} of {total}</span></div>"
         f'<div style="height:3px;background:{RULE};display:flex">'
-        f'<div style="width:{pct}%;background:{RED}"></div></div>'
+        f'<div style="width:{pct}%;background:{ACCENT}"></div></div>'
         f'<div style="padding-top:18px">{"".join(rows)}</div></div>'
     )
 
@@ -503,8 +511,8 @@ def render_cards(entries: list[SourcedCard]) -> str:
             f"{_face_head(card, rule_colour)}"
             f'<p style="margin:0;font-size:18px;font-weight:500;line-height:1.36;color:{INK};'
             f'text-wrap:pretty;flex-grow:1">{_esc(card.question)}</p>'
-            f'<div style="display:flex;align-items:center;gap:6px;color:{RED};flex-shrink:0">'
-            f'{_FLIP_ICON}<span style="{LBL};color:{RED}">flip for answer</span></div></div>'
+            f'<div style="display:flex;align-items:center;gap:6px;color:{ACCENT};flex-shrink:0">'
+            f'{_FLIP_ICON}<span style="{LBL};color:{ACCENT}">flip for answer</span></div></div>'
             f'<div class="fc-face fc-back" style="{edge}">'
             f"{_face_head(card, rule_colour, back=True)}"
             f'<p style="margin:0;font-size:15px;line-height:28px;color:{INK_2};'
@@ -527,7 +535,7 @@ def render_partial(failures: list[str]) -> str:
     count = len(failures)
     return (
         f'<div style="font-family:{SERIF};padding-top:18px">'
-        f'<div style="border:1px solid {RULE};border-left:3px solid {AMBER};background:#faf4e8;'
+        f'<div style="border:1px solid {RULE};border-left:3px solid {OCHRE};background:#faf4e8;'
         f'border-radius:2px;padding:16px 20px">'
         f'<span style="font-size:16px;font-weight:600;color:{INK}">'
         f'{count} chunk{"" if count == 1 else "s"} failed</span>{lines}</div></div>'

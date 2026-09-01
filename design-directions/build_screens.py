@@ -16,7 +16,11 @@ PAPER, CARD_BG = "#faf7f2", "#fffdfa"
 INK, INK_2, INK_3 = "#23201c", "#4a443b", "#6d6559"
 RULE, RULE_2 = "#d9d2c6", "#e6e0d5"
 MUTE = "#8c8578"
-RED, AMBER, OX = "#a63d2f", "#c98a2e", "#8c3b2a"
+# Difficulty is a sequential ramp, cool to hot; every step clears WCAG AA on
+# the card ground. Actions use a separate hue so a card edge never reads as a
+# button -- blue ink on ruled paper, which is what the metaphor wants.
+SAGE, OCHRE, OXBLOOD = "#5b7553", "#8f6116", "#9c3520"
+RED, AMBER, OX = "#2c4a6b", OCHRE, OXBLOOD
 
 SERIF = "'Newsreader', Georgia, serif"
 MONO = "font-family:'IBM Plex Mono',ui-monospace,monospace"
@@ -44,7 +48,7 @@ def head(height: int, width: int = 1280, pad: str = "0 56px 48px") -> str:
     *, *::before, *::after {{ box-sizing: border-box; }}
     body {{ margin: 0; background: {PAPER}; color: {INK};
            font-family: {SERIF}; }}
-    a {{ color: {RED}; }} a:hover {{ color: #7d2c20; }}
+    a {{ color: {RED}; }} a:hover {{ color: #213952; }}
     .mono {{ font-family: 'IBM Plex Mono', ui-monospace, monospace; }}
     .lbl {{ font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10.5px;
            letter-spacing: .12em; text-transform: uppercase; color: {MUTE}; }}
@@ -121,7 +125,7 @@ def sidebar(filled: bool = True, note: str = "") -> str:
 """
 
 
-LEVELS = {"easy": (1, RED), "medium": (2, AMBER), "hard": (3, OX)}
+LEVELS = {"easy": (1, SAGE), "medium": (2, OCHRE), "hard": (3, OXBLOOD)}
 
 
 def squares(level: str) -> str:
