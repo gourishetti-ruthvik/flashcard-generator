@@ -36,9 +36,15 @@ Gradio website in `app.py` served in a browser.
 
 ## API constraints
 
-- Gemini free tier: 5 RPM on `gemini-2.5-flash` (measured — the API rejects the
-  6th call in a minute reporting `quotaValue: 5`, not the widely quoted 15),
-  ~1500 RPD. This is a hard ceiling.
+- Gemini free tier on `gemini-2.5-flash`, both measured from the API's own
+  `QuotaFailure` details, not from docs:
+  - **5 requests per minute** — the 6th call in a minute is rejected with
+    `quotaValue: 5`, not the widely quoted 15.
+  - **20 requests per day** — `GenerateRequestsPerDayPerProjectPerModel-FreeTier`,
+    `quotaValue: 20`. Not the widely quoted 1500. Every retry spends one of the
+    20, so backoff is expensive here in a way it normally is not.
+  This is a hard ceiling, and 20/day is the constraint that shapes the design:
+  anything needing more calls than that must be resumable across days.
 - Every API call MUST route through the client wrapper in
   `src/flashcards/client.py`. Nothing else touches the API directly.
 - The wrapper provides: disk cache keyed on prompt hash, token-bucket rate

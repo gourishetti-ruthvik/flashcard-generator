@@ -98,6 +98,20 @@ def benchmark(
     source: Path = typer.Argument(..., exists=True, help="Note file or directory."),
     limit: int = typer.Option(None, "--limit", help="Only use N chunks."),
     repeats: int = typer.Option(1, "--repeats", help="Passes over each arm."),
+    results: Path = typer.Option(
+        Path("benchmark-results.jsonl"),
+        "--results",
+        help="Append each call's outcome here as it happens.",
+    ),
+    resume: bool = typer.Option(
+        False, "--resume", help="Skip calls already recorded in --results."
+    ),
+    quota_stop: int = typer.Option(
+        6, "--quota-stop", help="Give up after this many consecutive API errors."
+    ),
+    max_attempts: int = typer.Option(
+        2, "--max-attempts", help="Attempts per call before recording an error."
+    ),
 ) -> None:
     """Compare JSON mode against prompt-based JSON instructions."""
     try:
@@ -106,16 +120,68 @@ def benchmark(
         typer.secho(str(exc), fg=typer.colors.RED)
         raise typer.Exit(code=1) from exc
 
+    # Each retry is itself a request against the same quota. The rate limiter
+    # already paces the per-minute ceiling, so a 429 here usually means the
+    # daily cap, which no amount of backoff will clear -- three extra attempts
+    # just spend three more requests to learn what the first one said.
+    settings = settings.model_copy(update={"max_attempts": max_attempts})
+
     chunks = pipeline.collect_chunks(source, settings)[:limit]
     if not chunks:
         typer.secho("no chunks found", fg=typer.colors.RED)
         raise typer.Exit(code=1)
 
+    # Appending to a stale file would silently mix two runs' numbers, and
+    # truncating it would throw away calls that cost real quota. Neither is a
+    # decision to make on the user's behalf.
+    if results.exists() and results.stat().st_size and not resume:
+        typer.secho(
+            f"{results} already holds results. Pass --resume to continue that "
+            "run, or delete the file to start over.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+
+    done = len(benchmark_mod.load_records(results)) if resume else 0
     calls = len(chunks) * 2 * repeats
-    typer.echo(f"{len(chunks)} chunks x 2 arms x {repeats} = {calls} uncached calls\n")
+    typer.echo(f"{len(chunks)} chunks x 2 arms x {repeats} = {calls} uncached calls")
+    if done:
+        typer.echo(f"resuming: {done} already recorded, {calls - done} to go")
+    typer.echo("")
+
+    def show(record: dict) -> None:
+        if record.get("event") == "stopped":
+            typer.secho(
+                f"stopped after {record['after']} consecutive API errors -- "
+                f"rerun with --resume to pick up where this left off",
+                fg=typer.colors.YELLOW,
+            )
+            return
+        mark, colour = ("ok", typer.colors.GREEN) if record["ok"] else (
+            record["kind"], typer.colors.RED
+        )
+        tail = (
+            f"{record['latency']:.2f}s  {record['cards']} cards"
+            if record["ok"]
+            else str(record.get("detail", ""))[:60]
+        )
+        typer.secho(
+            f"  {record['arm']:<7}{record['chunk']:<28}#{record['repeat']} "
+            f"{mark:<6}{tail}",
+            fg=colour,
+        )
 
     client = GeminiClient(settings)
-    arms = benchmark_mod.run(chunks, settings, client, repeats=repeats)
+    arms = benchmark_mod.run(
+        chunks,
+        settings,
+        client,
+        repeats=repeats,
+        results_path=results,
+        progress=show,
+        quota_stop=quota_stop,
+    )
+    typer.echo("")
 
     typer.echo(f"{'arm':<32}{'runs':>6}{'failed':>8}{'rate':>8}{'mean latency':>15}")
     typer.echo("-" * 69)

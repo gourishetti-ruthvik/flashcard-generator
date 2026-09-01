@@ -36,6 +36,17 @@ flashcards benchmark notes/
 | `--limit N` | Process only N chunks — the throttle that matters on a free tier |
 | `--no-dedupe` | Skip near-duplicate removal |
 
+`flashcards benchmark` has its own flags, all of them there because 20 calls a
+day is not enough to finish a run in one sitting:
+
+| Flag | Meaning |
+|---|---|
+| `--results PATH` | Append each call's outcome as it happens (default `benchmark-results.jsonl`) |
+| `--resume` | Skip calls already recorded, and retry the ones quota refused |
+| `--repeats N` | Passes over each arm |
+| `--quota-stop N` | Give up after N consecutive API errors instead of grinding |
+| `--max-attempts N` | Attempts per call, default 2 — each retry spends a request |
+
 Import the CSV with **File → Import** in Anki. The file carries
 `#separator:Comma` and `#columns:Front,Back,Tags`, so field mapping is automatic.
 
@@ -101,8 +112,12 @@ that become unanswerable once the card is in Anki.
 **Chunk sizes use a 4-chars-per-token estimate.** The real tokenizer is a network
 call, and `--dry-run` must not make one.
 
-**Free tier is 5 RPM on `gemini-2.5-flash`**, measured — the API rejects the 6th
-call in a minute reporting `quotaValue: 5`, not the widely quoted 15.
+**Free tier is 5 requests per minute and 20 per day on `gemini-2.5-flash`**, both
+read off the API's own `QuotaFailure` details rather than the docs. The daily cap
+is the one that bites: it is 20, not the widely quoted 1500, and every retry
+spends one of the 20. That is why `--limit` exists, why the cache keys on the
+model and every generation knob, and why the benchmark is resumable — anything
+needing more than 20 calls simply cannot finish in a day.
 
 ## Design
 
