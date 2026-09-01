@@ -123,7 +123,7 @@ current design, not a set of options.
 pytest
 ```
 
- tests, no network calls. The SDK client is stubbed and the embedding encoder
+175 tests, no network calls. The SDK client is stubbed and the embedding encoder
 is faked, so the suite runs offline in about 3 seconds.
 
 ## Benchmark results
