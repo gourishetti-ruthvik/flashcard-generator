@@ -48,9 +48,12 @@ OCHRE = "#8f6116"
 OXBLOOD = "#9c3520"
 
 # Actions are a separate hue entirely, so an "easy" card's edge never reads as a
-# button. Blue ink on ruled paper is also what the metaphor wants.
+# button. Blue ink on ruled paper is also what the metaphor wants. The estimate
+# confirmation uses it too: green there was the same sage as "easy", which read
+# as card metadata rather than the app speaking.
 ACCENT = "#2c4a6b"
-GREEN = SAGE
+ACCENT_TINT = "#eef2f7"
+ACCENT_EDGE = "#dde5ee"
 
 # level -> (margin-rule colour, filled squares)
 DIFFICULTY = {"easy": (SAGE, 1), "medium": (OCHRE, 2), "hard": (OXBLOOD, 3)}
@@ -253,7 +256,10 @@ footer, .show-api, .built-with {{ display: none !important; }}
   perspective: 1400px;
   cursor: pointer;
   transition: transform .25s ease;
-  animation: fc-in .4s cubic-bezier(.2,.8,.2,1) both;
+  /* backwards, not both: with `both` the entrance keyframe's `transform: none`
+     persists after the animation, and an animated value beats a normal one in
+     the cascade -- so the hover lift below silently never applied. */
+  animation: fc-in .4s cubic-bezier(.2,.8,.2,1) backwards;
 }}
 .fc:hover {{ transform: translateY(-3px); }}
 .fc input {{ position: absolute; opacity: 0; width: 0; height: 0; }}
@@ -277,9 +283,24 @@ footer, .show-api, .built-with {{ display: none !important; }}
   display: flex; flex-direction: column; gap: 11px;
   transition: box-shadow .25s ease;
 }}
-.fc:hover .fc-face {{ box-shadow: 0 8px 22px rgba(35,32,28,.10); }}
+.fc:hover .fc-face {{
+  box-shadow: 0 8px 22px rgba(35,32,28,.10);
+  border-color: {MUTE};
+}}
 .fc input:focus-visible ~ .fc-inner .fc-face {{
   outline: 2px solid {ACCENT}; outline-offset: 2px;
+}}
+/* The affordance answers back. Without this the card lifts but the thing that
+   says "flip for answer" stays inert, so nothing confirms what the click does.
+   Focus gets the same treatment, or keyboard users never see it. */
+.flip-hint {{ transition: color .2s ease; }}
+.flip-hint svg {{ transition: transform .45s cubic-bezier(.2,.8,.2,1); }}
+.fc:hover .flip-hint,
+.fc input:focus-visible ~ .fc-inner .flip-hint {{ color: {INK} !important; }}
+.fc:hover .flip-hint svg,
+.fc input:focus-visible ~ .fc-inner .flip-hint svg {{ transform: rotate(-180deg); }}
+@media (prefers-reduced-motion: reduce) {{
+  .flip-hint, .flip-hint svg {{ transition: none !important; }}
 }}
 /* The reverse of an index card is ruled. Line-height matches the rule pitch so
    the answer sits on the lines. */
@@ -379,11 +400,11 @@ def render_estimate(chunks: int, tokens: int, rpm: int) -> str:
         f'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;'
         f'padding:14px 20px 20px">{cells}</div>'
         f'<div style="display:flex;align-items:center;gap:10px;padding:14px 20px;'
-        f'background:#f2f5ee;border-top:1px solid #dfe5d8">'
-        f'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{GREEN}" '
+        f'background:{ACCENT_TINT};border-top:1px solid {ACCENT_EDGE}">'
+        f'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{ACCENT}" '
         f'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
         f'<path d="M20 6L9 17l-5-5"></path></svg>'
-        f'<span style="font-size:14px;color:#3f5c3a">No API calls were made.</span></div></div>'
+        f'<span style="font-size:14px;color:{ACCENT}">No API calls were made.</span></div></div>'
         f'<p style="margin:12px 2px 0;font-size:13px;line-height:1.55;color:{MUTE}">'
         f"Token count is estimated locally at four characters per token, not measured "
         f"by the API.{wait_line}</p></div>"
@@ -531,8 +552,9 @@ def render_cards(entries: list[SourcedCard]) -> str:
             f"{_face_head(card, rule_colour)}"
             f'<p style="margin:0;font-size:18px;font-weight:500;line-height:1.36;color:{INK};'
             f'text-wrap:pretty;flex-grow:1">{_esc(card.question)}</p>'
-            f'<div style="display:flex;align-items:center;gap:6px;color:{ACCENT};flex-shrink:0">'
-            f'{_FLIP_ICON}<span style="{LBL};color:{ACCENT}">flip for answer</span></div></div>'
+            f'<div class="flip-hint" style="display:flex;align-items:center;gap:6px;'
+            f'color:{ACCENT};flex-shrink:0">'
+            f'{_FLIP_ICON}<span style="{LBL};color:inherit">flip for answer</span></div></div>'
             f'<div class="fc-face fc-back" style="{edge}">'
             f"{_face_head(card, rule_colour, back=True)}"
             f'<p style="margin:0;font-size:15px;line-height:28px;color:{INK_2};'

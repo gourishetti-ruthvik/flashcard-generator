@@ -372,3 +372,26 @@ def test_action_colour_is_not_a_difficulty_colour() -> None:
     # Otherwise a card's edge reads as a button.
     assert app.ACCENT not in {colour for colour, _ in app.DIFFICULTY.values()}
     assert min(abs(_hue(app.ACCENT) - _hue(c)) for c, _ in app.DIFFICULTY.values()) >= 40
+
+
+def test_estimate_confirmation_is_not_a_difficulty_colour() -> None:
+    # It was sage, the same colour as "easy", so the panel read as card metadata
+    # rather than the app confirming something.
+    estimate = app.render_estimate(3, 758, 5)
+    for colour, _ in app.DIFFICULTY.values():
+        assert colour not in estimate
+
+
+def test_flip_affordance_is_hoverable() -> None:
+    # The card lifted on hover but the affordance stayed inert.
+    assert 'class="flip-hint"' in app.render_cards([_sourced(_card())])
+    assert ".fc:hover .flip-hint" in app.CSS
+    assert "focus-visible ~ .fc-inner .flip-hint" in app.CSS
+
+
+def test_entrance_animation_does_not_pin_the_hover_lift() -> None:
+    # animation-fill-mode: both keeps the final keyframe's `transform: none`
+    # applied forever, and an animated value outranks a normal one, so
+    # `.fc:hover { transform: translateY(-3px) }` never took effect.
+    assert "cubic-bezier(.2,.8,.2,1) backwards" in app.CSS
+    assert "cubic-bezier(.2,.8,.2,1) both" not in app.CSS
