@@ -20,7 +20,8 @@ MUTE = "#8c8578"
 # the card ground. Actions use a separate hue so a card edge never reads as a
 # button -- blue ink on ruled paper, which is what the metaphor wants.
 SAGE, OCHRE, OXBLOOD = "#5b7553", "#8f6116", "#9c3520"
-RED, AMBER, OX = "#2c4a6b", OCHRE, OXBLOOD
+ACTION = "#2c4a6b"
+RED, AMBER, OX = ACTION, OCHRE, OXBLOOD
 
 SERIF = "'Newsreader', Georgia, serif"
 MONO = "font-family:'IBM Plex Mono',ui-monospace,monospace"
@@ -159,7 +160,8 @@ FACE = (
 )
 
 
-def card(question: str, topic: str, level: str, answer: str, back: bool = False) -> str:
+def card(question: str, topic: str, level: str, answer: str, back: bool = False,
+         hover: bool = False) -> str:
     """One face of a flip card: the question, or the ruled reverse."""
     rule_colour = LEVELS[level][1]
     edge = f"border-left:3px solid {rule_colour};"
@@ -174,8 +176,15 @@ def card(question: str, topic: str, level: str, answer: str, back: bool = False)
             f'text-wrap:pretty;flex-grow:1">{answer}</p></div>'
         )
 
+    # Hover is a real state the app has; a still can only pose it.
+    shadow = ("box-shadow:0 8px 22px rgba(35,32,28,.10);border-color:" + MUTE
+              if hover else "box-shadow:0 8px 22px rgba(35,32,28,.06)")
+    lift = "transform:translateY(-3px);" if hover else ""
+    hint = INK if hover else ACTION
+    spin = "transform:rotate(-180deg);" if hover else ""
+
     return (
-        f'<div style="{FACE}{edge}box-shadow:0 8px 22px rgba(35,32,28,.06)">'
+        f'<div style="{lift}{FACE}{edge}{shadow}">'
         f'<div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0">'
         f'<div style="display:flex;align-items:center;gap:8px">'
         f'<span style="display:inline-flex;gap:3px">{squares(level)}</span>'
@@ -183,8 +192,9 @@ def card(question: str, topic: str, level: str, answer: str, back: bool = False)
         f'<span class="lbl">{topic}</span></div>'
         f'<p style="margin:0;font-size:18px;font-weight:500;line-height:1.36;'
         f'text-wrap:pretty;flex-grow:1">{question}</p>'
-        f'<div style="display:flex;align-items:center;gap:6px;color:{rule_colour};flex-shrink:0">'
-        f'{FLIP_ICON}<span class="lbl" style="color:{rule_colour}">flip for answer</span></div></div>'
+        f'<div style="display:flex;align-items:center;gap:6px;color:{hint};flex-shrink:0">'
+        f'<span style="display:inline-flex;{spin}">{FLIP_ICON}</span>'
+        f'<span class="lbl" style="color:{hint}">flip for answer</span></div></div>'
     )
 
 
@@ -343,30 +353,36 @@ def page(name: str, results: str, height: int, filled: bool = True, note: str = 
 
 
 def anatomy() -> str:
-    """Front, mid-flip and back in a row, to document the rotation."""
+    """Rest, hover, mid-flip and back in a row, to document the interaction."""
     question, topic, level, answer = CARD_DATA[0]
     mid = (
         '<div style="perspective:1400px">'
         '<div style="transform:rotateY(-52deg);transform-origin:center">'
         f"{card(question, topic, level, answer)}</div></div>"
     )
-    labels = ("Front · at rest", "Mid-flip · 0.6s rotateY", "Back · ruled, answer")
-    faces = (card(question, topic, level, answer), mid,
-             card(question, topic, level, answer, back=True))
-    cells = "".join(
+    cells = [
+        ("At rest", card(question, topic, level, answer)),
+        ("Hover / focus", card(question, topic, level, answer, hover=True)),
+        ("Mid-flip · 0.6s", mid),
+        ("Back · ruled", card(question, topic, level, answer, back=True)),
+    ]
+    grid_cells = "".join(
         f'<div style="display:flex;flex-direction:column;gap:12px">'
         f'<span class="lbl">{label}</span>{face}</div>'
-        for label, face in zip(labels, faces)
+        for label, face in cells
     )
     return (
-        f'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));'
-        f'gap:36px;padding-top:26px">{cells}</div>'
-        f'<p style="margin:30px 0 0;font-size:14.5px;line-height:1.6;color:{INK_3};max-width:640px">'
+        f'<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));'
+        f'gap:22px;padding-top:26px;align-items:start">{grid_cells}</div>'
+        f'<p style="margin:30px 0 0;font-size:14.5px;line-height:1.6;color:{INK_3};max-width:760px">'
         "The flip is a hidden checkbox driving a rotateY, so it needs no JavaScript and "
         "stays keyboard-operable. Both faces share one grid cell, so a card is as tall "
-        "as its taller face and no answer scrolls inside a box. Hover lifts the card "
-        "3px; entrance is staggered 45ms per card. All "
-        "motion is dropped under prefers-reduced-motion, where the flip still works.</p>"
+        "as its taller face and no answer scrolls inside a box.</p>"
+        f'<p style="margin:12px 0 0;font-size:14.5px;line-height:1.6;color:{INK_3};max-width:760px">'
+        "On hover or keyboard focus the card lifts 3px, its border darkens, the hint goes "
+        "from blue to ink and the icon turns 180 degrees -- the affordance answers back "
+        "rather than sitting inert. Entrance is staggered 45ms per card. All motion is "
+        "dropped under prefers-reduced-motion, where the flip still works.</p>"
     )
 
 

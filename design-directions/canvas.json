@@ -70,7 +70,7 @@
       "x": 4300,
       "y": 1140,
       "w": 1180,
-      "h": 700
+      "h": 780
     }
   ],
   "annotations": [
@@ -100,7 +100,7 @@
       "x": 4300,
       "y": 1000,
       "w": 1180,
-      "text": "How the card behaves: front, mid-flip, back."
+      "text": "How the card behaves: at rest, on hover or focus, mid-flip, and its ruled back."
     }
   ],
   "launch": {
