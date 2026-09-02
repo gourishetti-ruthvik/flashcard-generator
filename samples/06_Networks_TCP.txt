@@ -1,0 +1,34 @@
+TCP Reliability and Congestion Control
+
+TCP provides a reliable, ordered byte stream over an unreliable packet
+network. It achieves this with sequence numbers, cumulative acknowledgements,
+checksums, and retransmission on timeout or duplicate acknowledgement.
+
+The three-way handshake establishes a connection. The client sends a SYN with
+an initial sequence number, the server replies SYN-ACK with its own, and the
+client responds ACK. Both sides now know each other's starting sequence
+numbers. Connection teardown uses a four-way exchange because each direction
+closes independently; a host that has finished sending may still receive.
+
+Flow control and congestion control solve different problems and are often
+confused. Flow control stops a fast sender from overwhelming a slow receiver,
+and is handled by the receiver advertising a window. Congestion control stops
+senders collectively from overwhelming the network itself, and is inferred
+rather than advertised, because routers do not tell endpoints they are
+congested. TCP treats packet loss as the congestion signal.
+
+Slow start begins with a small congestion window and doubles it every round
+trip, which is exponential growth despite the name. On reaching the slow
+start threshold it switches to congestion avoidance, growing by roughly one
+segment per round trip. On three duplicate acknowledgements it halves the
+window and continues, called fast recovery. On a timeout, which indicates
+more severe loss, it drops back to the initial window and restarts slow
+start.
+
+The reason loss is used as the signal is historical and increasingly
+awkward. On wireless links, packets are lost to interference rather than
+congestion, so TCP needlessly slows down. On deeply buffered links, routers
+absorb excess packets instead of dropping them, so loss arrives far too
+late and latency balloons. This is bufferbloat. Newer algorithms such as BBR
+model the bottleneck bandwidth and round-trip time directly rather than
+waiting for loss.
