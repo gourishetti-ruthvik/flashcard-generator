@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from google.genai import errors
 
+from flashcards import client
 from flashcards.client import (
     MAX_RETRY_SLEEP,
     GeminiClient,
@@ -413,3 +414,74 @@ def test_a_per_minute_quota_error_is_still_retried(
     with pytest.raises(errors.APIError):
         GeminiClient(settings).generate_text("prompt")
     assert len(captured["models"].calls) == settings.max_attempts
+
+
+# --- the daily ration ------------------------------------------------------
+
+
+def test_a_served_call_spends_one(settings: Settings, fake_api) -> None:
+    fake_api([reply([CARD])])
+    GeminiClient(settings).generate_cards("prompt")
+    assert client.spent_today(settings) == 1
+
+
+def test_a_cache_hit_spends_nothing(settings: Settings, fake_api) -> None:
+    # A cached reply returns before _call_with_retry, so it never counts.
+    fake_api([reply([CARD])])
+    GeminiClient(settings).generate_cards("prompt")
+    GeminiClient(settings).generate_cards("prompt")
+    assert client.spent_today(settings) == 1
+
+
+def test_a_quota_rejection_spends_nothing(settings: Settings, fake_api) -> None:
+    """A 429 is the quota refusing the request; it does not consume one.
+
+    Counting it would make the strip run ahead of reality exactly when the
+    number matters most.
+    """
+    fake_api([_quota_error(DAILY, delay="0s")])
+    with pytest.raises(errors.APIError):
+        GeminiClient(settings).generate_text("prompt")
+    assert client.spent_today(settings) == 0
+
+
+def test_a_server_error_does_spend(settings: Settings, fake_api) -> None:
+    # It reached the model and was served badly, which is not free.
+    fake_api([errors.ServerError(500, {"error": {"message": "boom"}})])
+    with pytest.raises(errors.APIError):
+        GeminiClient(settings).generate_cards("prompt")
+    assert client.spent_today(settings) == 1
+
+
+def test_every_retry_spends_its_own_request(settings: Settings, fake_api) -> None:
+    # Three attempts against an overloaded model cost three of the twenty,
+    # which is why max_attempts is lowered for the benchmark.
+    fake_api([overloaded()])
+    with pytest.raises(errors.APIError):
+        GeminiClient(settings.model_copy(update={"max_attempts": 3})).generate_cards("p")
+    assert client.spent_today(settings) == 3
+
+
+def test_the_count_is_shared_across_clients(settings: Settings, fake_api) -> None:
+    # The whole point: the CLI, the benchmark and the website draw on one
+    # number rather than each keeping a private tally.
+    fake_api([reply([CARD])])
+    GeminiClient(settings).generate_cards("first")
+    GeminiClient(settings).generate_cards("second")
+    assert client.spent_today(settings) == 2
+
+
+def test_the_day_key_is_pacific(settings: Settings) -> None:
+    # Google's cap rolls over at midnight US Pacific. Keying on the local date
+    # would reset the count hours early or late.
+    from datetime import datetime
+
+    client.record_spend(settings, 2)
+    stored = json.loads(client.usage_file(settings).read_text(encoding="utf-8"))
+    assert list(stored) == [datetime.now(client.PACIFIC).strftime("%Y-%m-%d")]
+
+
+def test_a_corrupt_counter_reads_as_zero(settings: Settings) -> None:
+    client.usage_file(settings).parent.mkdir(parents=True, exist_ok=True)
+    client.usage_file(settings).write_text("{not json", encoding="utf-8")
+    assert client.spent_today(settings) == 0

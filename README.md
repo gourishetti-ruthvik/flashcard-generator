@@ -63,9 +63,11 @@ notes or upload `.md`/`.txt`, press **Preview** for a free estimate, then
 
 The header carries a **daily ration**: twenty tick marks that fill as requests
 are spent, because the 20-a-day cap is otherwise invisible until it bites. The
-count is real, persisted per Pacific day in `.llm_cache/daily-usage.json` so it
-resets when Google's does. It counts what the website spends — CLI and benchmark
-runs go through the same quota but are not currently added to the strip.
+count is recorded inside the client wrapper, so the CLI, the benchmark and the
+website all move the same number — `flashcards generate` and `flashcards
+benchmark` print it too. It lives in `.llm_cache/daily-usage.json`, keyed by
+Pacific day so it resets when Google's cap does, and a 429 does not count
+against it: that is the quota refusing a request, not consuming one.
 
 Preview costs nothing and prices the run before you commit: the Generate button
 relabels itself to *"spends 3 of your 20"*. Light and dark both ship, following
@@ -150,7 +152,7 @@ current design, not a set of options.
 pytest
 ```
 
-247 tests, no network calls. The SDK client is stubbed and the embedding encoder
+260 tests, no network calls. The SDK client is stubbed and the embedding encoder
 is faked, so the suite runs offline in about 3 seconds.
 
 ## Benchmark results

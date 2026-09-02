@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from flashcards.cli import app
+from flashcards.cli import app, ration_line
 from flashcards.config import Settings
 
 runner = CliRunner()
@@ -61,3 +61,22 @@ def test_version_command() -> None:
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
     assert "flashcards" in result.stdout
+
+
+def test_dry_run_reports_the_daily_ration(tmp_path: Path) -> None:
+    """The cap is the binding constraint on this tier and used to be invisible
+    until a run failed halfway through."""
+    notes = tmp_path / "n.md"
+    notes.write_text("# H\n\nSome body text here for the chunker.", encoding="utf-8")
+    result = runner.invoke(app, ["generate", str(notes), "--dry-run"])
+    assert result.exit_code == 0
+    assert "ration:" in result.stdout and "of 20 spent today" in result.stdout
+
+
+def test_the_ration_line_counts_down(settings: Settings) -> None:
+    from flashcards import client as client_mod
+
+    client_mod.record_spend(settings, 8)
+    line = ration_line(settings)
+    assert "8 of 20 spent today, 12 left" in line
+    assert "resets in" in line

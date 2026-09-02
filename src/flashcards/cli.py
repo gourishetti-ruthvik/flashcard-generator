@@ -6,8 +6,8 @@ import typer
 
 from flashcards import __version__, benchmark as benchmark_mod, dedupe, exporter, pipeline
 from flashcards.chunker import estimate_tokens
-from flashcards.client import GeminiClient
-from flashcards.config import ConfigError, load_settings
+from flashcards.client import GeminiClient, resets_in, spent_today
+from flashcards.config import ConfigError, Settings, load_settings
 
 app = typer.Typer(
     add_completion=False,
@@ -20,6 +20,20 @@ def main() -> None:
     # Keeps Typer in a subcommand layout; without it a lone command gets
     # promoted to the root and `flashcards <name>` fails as an extra argument.
     pass
+
+
+def ration_line(settings: Settings) -> str:
+    """One line naming what today's 20 has left.
+
+    The cap is the binding constraint on this tier and used to be invisible
+    until a run failed halfway through.
+    """
+    spent = spent_today(settings)
+    left = max(0, settings.daily_cap - spent)
+    return (
+        f"ration: {spent} of {settings.daily_cap} spent today, {left} left "
+        f"(resets in {resets_in()})"
+    )
 
 
 @app.command()
@@ -53,6 +67,7 @@ def generate(
         typer.echo(f"estimated requests: {len(chunks)} (before any retries)")
         typer.echo(f"estimated prompt tokens: ~{tokens} (4 chars/token, not exact)")
         typer.echo("requests made: 0")
+        typer.echo(ration_line(settings))
         return
 
     result = pipeline.run(
@@ -91,6 +106,7 @@ def generate(
         f"dropped: {result.dropped}   duplicates: {duplicates}   "
         f"requests: {result.requests}   cached: {result.cache_hits}"
     )
+    typer.echo(ration_line(settings))
 
 
 @app.command()
@@ -204,6 +220,7 @@ def benchmark(
         "prompt-based replies"
     )
     typer.echo(f"requests: {client.request_count}")
+    typer.echo(ration_line(settings))
 
 
 if __name__ == "__main__":

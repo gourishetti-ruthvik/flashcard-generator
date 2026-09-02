@@ -8,11 +8,9 @@ collapsing to one column below 900px.
 The spine of the design is the daily ration: twenty tick marks in the header
 that fill as requests are spent, because the free tier's 20-a-day cap is the
 constraint that governs everything and it is otherwise invisible until it bites.
-The count is real, persisted per Pacific day, not decoration -- though it counts
-only what this front end spends. A CLI or benchmark run draws on the same quota
-without moving the strip, so the honest reading is "what the website has used
-today", not "what is left". Making it exact means counting inside the client
-wrapper, where every call already routes.
+The count is real, not decoration: it is recorded inside the client wrapper, so
+the CLI, the benchmark and this page all draw on one number, and it is re-read
+on every page load rather than baked in when the server booted.
 
 All real work is done by the same package the CLI uses; the key is read
 server-side and never reaches the browser. Everything non-interactive is
@@ -25,79 +23,28 @@ hex so that one token swap gives the whole page a dark mode.
 from __future__ import annotations
 
 import html
-import json
 import os
 import tempfile
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import gradio as gr
 from google.genai import errors
 
 from flashcards import dedupe, exporter, pipeline
 from flashcards.chunker import estimate_tokens
-from flashcards.client import GeminiClient, is_daily_cap
+from flashcards.client import (
+    DAILY_CAP,
+    GeminiClient,
+    is_daily_cap,
+    quota_day,
+    record_spend,
+    resets_in,
+    spent_today,
+    usage_file,
+)
 from flashcards.config import ConfigError, Settings, load_settings
 from flashcards.models import Chunk, SourcedCard
-
-# --- the ration ------------------------------------------------------------
-
-DAILY_CAP = 20
-# Measured from the API's own QuotaFailure: GenerateRequestsPerDayPerProject-
-# PerModel-FreeTier, quotaValue 20. The window rolls over at midnight US
-# Pacific, not local midnight -- probed once a minute for four minutes at the
-# cap and it never reopened early, so the boundary is a hard daily reset.
-PACIFIC = ZoneInfo("America/Los_Angeles")
-
-
-def quota_day() -> str:
-    return datetime.now(PACIFIC).strftime("%Y-%m-%d")
-
-
-def resets_in() -> str:
-    now = datetime.now(PACIFIC)
-    midnight = (now + timedelta(days=1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    minutes = int((midnight - now).total_seconds()) // 60
-    hours, mins = divmod(minutes, 60)
-    return f"{hours}h {mins}m" if hours else f"{mins}m"
-
-
-def _usage_file(settings: Settings) -> Path:
-    return settings.cache_dir / "daily-usage.json"
-
-
-def read_spent(settings: Settings) -> int:
-    """Requests already spent in the current Pacific day.
-
-    A missing or corrupt file reads as zero rather than raising: the ration is
-    an aid, and refusing to render the page because a counter is unparsable
-    would be worse than briefly under-reporting it.
-    """
-    try:
-        data = json.loads(_usage_file(settings).read_text(encoding="utf-8"))
-        return int(data.get(quota_day(), 0))
-    except (OSError, ValueError, TypeError):
-        return 0
-
-
-def add_spent(settings: Settings, count: int) -> int:
-    if count <= 0:
-        return read_spent(settings)
-    total = read_spent(settings) + count
-    path = _usage_file(settings)
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        # Only today's key is kept; yesterday's count answers no question worth
-        # the file growing forever.
-        path.write_text(json.dumps({quota_day(): total}), encoding="utf-8")
-    except OSError:
-        pass
-    return total
-
 
 # --- design tokens ---------------------------------------------------------
 
@@ -755,13 +702,17 @@ def preview(notes_text: str, files: list[str] | None, max_chunks: float):
     try:
         settings = load_settings()
     except ConfigError as exc:
-        return render_error("No API key", "", _esc(str(exc)), _NO_KEY_STEPS), generate_label
+        return (
+            render_error("No API key", "", _esc(str(exc)), _NO_KEY_STEPS),
+            generate_label,
+            header_html(0),
+        )
 
     chunks = gather_chunks(notes_text, files, settings)[: chunk_limit(max_chunks)]
+    spent = spent_today(settings)
     if not chunks:
-        return NO_INPUT, generate_label
+        return NO_INPUT, generate_label, header_html(spent)
 
-    spent = read_spent(settings)
     tokens = sum(estimate_tokens(chunk.text) for chunk in chunks)
     left = max(0, DAILY_CAP - spent)
     return (
@@ -769,6 +720,7 @@ def preview(notes_text: str, files: list[str] | None, max_chunks: float):
         # The cost rides on the button itself, so pressing Generate is a
         # considered act rather than a reflex.
         gr.update(value=f"Generate · spends {len(chunks)} of your {left}"),
+        header_html(spent),
     )
 
 
@@ -788,7 +740,7 @@ def generate(
         )
         return
 
-    spent = read_spent(settings)
+    spent = spent_today(settings)
     chunks = gather_chunks(notes_text, files, settings)[: chunk_limit(max_chunks)]
     if not chunks:
         yield header_html(spent), NO_INPUT, "", hide
@@ -810,7 +762,7 @@ def generate(
             f"Waiting for the {rpm}-a-minute limit." if index and index % rpm == 0 else ""
         )
         yield (
-            header_html(spent + client.request_count),
+            header_html(spent_today(settings)),
             render_progress(rows, extra, waiting),
             render_cards(outcome.entries),
             hide,
@@ -819,7 +771,7 @@ def generate(
         try:
             result = pipeline.run([chunk], settings, client)
         except errors.APIError as exc:
-            spent = add_spent(settings, client.request_count)
+            spent = spent_today(settings)
             if is_daily_cap(exc):
                 status = render_quota_spent(spent, len(outcome.entries))
             else:
@@ -847,7 +799,7 @@ def generate(
         rows[index][1] = "done"
         rows[index][2] = f"{len(result.cards)} cards"
         yield (
-            header_html(spent + client.request_count),
+            header_html(spent_today(settings)),
             render_progress(rows, extra),
             render_cards(outcome.entries),
             hide,
@@ -856,7 +808,7 @@ def generate(
     if use_dedupe:
         extra[0][1] = "active"
         yield (
-            header_html(spent + client.request_count),
+            header_html(spent_today(settings)),
             render_progress(rows, extra),
             render_cards(outcome.entries),
             hide,
@@ -875,8 +827,8 @@ def generate(
     outcome.csv_path = write_csv(outcome.entries)
     outcome.requests = client.request_count
     outcome.cache_hits = client.cache_hits
-    # Cached replies cost no quota, so only real calls move the ration.
-    spent = add_spent(settings, max(0, outcome.requests - outcome.cache_hits))
+    # Cached replies never reach _call_with_retry, so they never counted.
+    spent = spent_today(settings)
 
     summary = render_summary(
         len(outcome.entries),
@@ -912,9 +864,19 @@ GROUND = (
 
 def initial_spent() -> int:
     try:
-        return read_spent(load_settings())
+        return spent_today(load_settings())
     except ConfigError:
         return 0
+
+
+def refresh_header() -> str:
+    """Re-read the count on every page load.
+
+    header_html() is evaluated once when the Blocks are built, so without this
+    the strip froze at whatever the count was when the server booted. A CLI or
+    benchmark run spends from the same twenty and would never have shown up.
+    """
+    return header_html(initial_spent())
 
 
 with gr.Blocks(title="Flashcards") as demo:
@@ -961,10 +923,11 @@ with gr.Blocks(title="Flashcards") as demo:
             )
             cards = gr.HTML()
 
+    demo.load(refresh_header, outputs=header)
     preview_button.click(
         preview,
         inputs=[notes_input, file_input, max_chunks],
-        outputs=[status, generate_button],
+        outputs=[status, generate_button, header],
     )
     generate_button.click(
         generate,

@@ -6,7 +6,9 @@ import random
 import re
 import time
 from collections.abc import Callable
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from google import genai
 from google.genai import errors, types
@@ -25,6 +27,64 @@ RETRY_CODES = frozenset({429, 503})
 # for 40 s and the largest local backoff is 4 s.
 _RETRY_DELAY = re.compile(r"^(\d+(?:\.\d+)?)s$")
 MAX_RETRY_SLEEP = 65.0
+
+
+# --- the daily ration ------------------------------------------------------
+
+# Counted here rather than in a front end because every call already routes
+# through this wrapper: the CLI, the benchmark and the website all draw on the
+# same 20, and a counter living in one of them would under-report the others.
+# The window rolls over at midnight US Pacific, not local midnight -- probed
+# once a minute for four minutes at the cap and it never reopened early.
+PACIFIC = ZoneInfo("America/Los_Angeles")
+DAILY_CAP = 20
+
+
+def quota_day() -> str:
+    return datetime.now(PACIFIC).strftime("%Y-%m-%d")
+
+
+def resets_in() -> str:
+    now = datetime.now(PACIFIC)
+    midnight = (now + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    minutes = int((midnight - now).total_seconds()) // 60
+    hours, mins = divmod(minutes, 60)
+    return f"{hours}h {mins}m" if hours else f"{mins}m"
+
+
+def usage_file(settings: Settings) -> Path:
+    return settings.cache_dir / "daily-usage.json"
+
+
+def spent_today(settings: Settings) -> int:
+    """Requests already spent in the current Pacific day.
+
+    A missing or corrupt file reads as zero rather than raising: the count is
+    an aid, and refusing to run because a counter is unparsable would be worse
+    than briefly under-reporting it.
+    """
+    try:
+        data = json.loads(usage_file(settings).read_text(encoding="utf-8"))
+        return int(data.get(quota_day(), 0))
+    except (OSError, ValueError, TypeError):
+        return 0
+
+
+def record_spend(settings: Settings, count: int = 1) -> int:
+    if count <= 0:
+        return spent_today(settings)
+    total = spent_today(settings) + count
+    path = usage_file(settings)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Only today's key is kept; yesterday's count answers no question worth
+        # the file growing forever.
+        path.write_text(json.dumps({quota_day(): total}), encoding="utf-8")
+    except OSError:
+        pass
+    return total
 
 
 class GeminiError(RuntimeError):
@@ -197,8 +257,13 @@ class GeminiClient:
                     config=config,
                 )
                 self._last_call_seconds = time.perf_counter() - started
+                record_spend(self._settings)
                 return response
             except errors.APIError as exc:
+                # A 429 is the quota refusing the request, so it consumes
+                # nothing. Anything else reached the server and did.
+                if exc.code != 429:
+                    record_spend(self._settings)
                 if (
                     exc.code not in RETRY_CODES
                     or attempt == self._settings.max_attempts - 1

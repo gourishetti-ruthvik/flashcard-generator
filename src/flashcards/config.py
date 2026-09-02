@@ -36,6 +36,7 @@ class Settings(BaseModel):
     # apply to this model.
     requests_per_minute: int = Field(default=5, gt=0)
     max_attempts: int = Field(default=4, gt=0)
+    daily_cap: int = Field(default=20, gt=0)
 
     cache_dir: Path = PROJECT_ROOT / ".llm_cache"
     note_suffixes: tuple[str, ...] = (".md", ".txt")

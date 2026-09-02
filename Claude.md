@@ -48,7 +48,12 @@ Gradio website in `app.py` served in a browser.
 - Every API call MUST route through the client wrapper in
   `src/flashcards/client.py`. Nothing else touches the API directly.
 - The wrapper provides: disk cache keyed on prompt hash, token-bucket rate
-  limiter, exponential backoff with jitter on 429, request counter.
+  limiter, exponential backoff with jitter on 429, request counter, and the
+  daily ration -- requests spent today, persisted per Pacific day. It lives
+  here rather than in a front end because every call already routes through
+  this one place; a counter in the CLI or the website would under-report the
+  other. A 429 does not count: that is the quota refusing a request, not
+  consuming one.
 - Tests must never make real API calls. Mock the client.
 - Model ID is a config value, never a string literal in business logic.
 

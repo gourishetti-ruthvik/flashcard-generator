@@ -104,13 +104,13 @@ def test_blank_paste_is_ignored(settings: Settings) -> None:
 
 
 def test_ration_starts_empty(settings: Settings) -> None:
-    assert app.read_spent(settings) == 0
+    assert app.spent_today(settings) == 0
 
 
 def test_ration_accumulates_within_a_day(settings: Settings) -> None:
-    app.add_spent(settings, 3)
-    assert app.add_spent(settings, 2) == 5
-    assert app.read_spent(settings) == 5
+    app.record_spend(settings, 3)
+    assert app.record_spend(settings, 2) == 5
+    assert app.spent_today(settings) == 5
 
 
 def test_ration_is_keyed_by_pacific_day(settings: Settings) -> None:
@@ -119,17 +119,17 @@ def test_ration_is_keyed_by_pacific_day(settings: Settings) -> None:
     Keying on the local date would reset the strip hours early or late and make
     it lie about what is left.
     """
-    app.add_spent(settings, 4)
-    stored = json.loads(app._usage_file(settings).read_text(encoding="utf-8"))
+    app.record_spend(settings, 4)
+    stored = json.loads(app.usage_file(settings).read_text(encoding="utf-8"))
     assert list(stored) == [app.quota_day()]
 
 
 def test_a_corrupt_counter_reads_as_zero(settings: Settings) -> None:
     # The ration is an aid; refusing to render the page over an unparsable
     # counter would be worse than briefly under-reporting.
-    app._usage_file(settings).parent.mkdir(parents=True, exist_ok=True)
-    app._usage_file(settings).write_text("{not json", encoding="utf-8")
-    assert app.read_spent(settings) == 0
+    app.usage_file(settings).parent.mkdir(parents=True, exist_ok=True)
+    app.usage_file(settings).write_text("{not json", encoding="utf-8")
+    assert app.spent_today(settings) == 0
 
 
 def test_ration_strip_marks_what_is_spent() -> None:
@@ -143,25 +143,27 @@ def test_header_counts_down_what_is_left() -> None:
     assert "none left" in app.header_html(app.DAILY_CAP)
 
 
-def test_cached_replies_do_not_move_the_ration(
-    monkeypatch: pytest.MonkeyPatch, settings: Settings
-) -> None:
-    """A cache hit consumes no quota, so it must not fill a tick."""
+def test_the_front_end_reports_the_clients_count(settings: Settings) -> None:
+    """app.py no longer keeps its own tally.
 
-    class Cached(FakeClient):
-        def generate_cards(self, prompt: str) -> list[Flashcard]:
-            self.request_count += 1
-            self.cache_hits += 1
-            return [_card()]
+    It did, and that made the strip lie: a CLI or benchmark run spent from the
+    same twenty without moving it. Counting now happens inside the client
+    wrapper, which every call already routes through, and the page just reads
+    the number back.
+    """
+    from flashcards import client as client_mod
 
-    monkeypatch.setattr(app, "GeminiClient", lambda _: Cached())
+    client_mod.record_spend(settings, 6)
+    assert app.spent_today(settings) == 6
+    assert "14</b> of 20 left" in app.header_html(app.spent_today(settings))
+
+
+def test_generate_does_not_add_a_second_tally(settings: Settings) -> None:
+    # The fake client never reaches _call_with_retry, so nothing is recorded.
+    # Any movement here would mean app.py is double-counting.
+    before = app.spent_today(settings)
     last(app.generate(NOTES, None, 5, False))
-    assert app.read_spent(settings) == 0
-
-
-def test_real_calls_do_move_the_ration(settings: Settings) -> None:
-    last(app.generate(NOTES, None, 5, False))
-    assert app.read_spent(settings) == 1
+    assert app.spent_today(settings) == before
 
 
 # --- rendering -------------------------------------------------------------
@@ -225,7 +227,7 @@ def test_estimate_warns_when_the_run_will_not_fit() -> None:
 
 
 def test_preview_reports_chunks_and_spends_nothing() -> None:
-    status, _ = app.preview(NOTES, None, 5)
+    status, _, _ = app.preview(NOTES, None, 5)
     assert "Estimate" in status and "nothing spent" in status
 
 
@@ -234,18 +236,18 @@ def test_preview_never_builds_a_client(monkeypatch: pytest.MonkeyPatch) -> None:
         raise AssertionError("preview must not touch the API")
 
     monkeypatch.setattr(app, "GeminiClient", explode)
-    status, _ = app.preview(NOTES, None, 5)
+    status, _, _ = app.preview(NOTES, None, 5)
     assert "Estimate" in status
 
 
 def test_preview_prices_the_generate_button() -> None:
     # The cost rides on the button itself so Generate is a considered act.
-    _, button = app.preview(NOTES, None, 5)
+    _, button, _ = app.preview(NOTES, None, 5)
     assert "spends 1 of your 20" in button["value"]
 
 
 def test_preview_on_empty_input_is_friendly() -> None:
-    status, _ = app.preview("", None, 5)
+    status, _, _ = app.preview("", None, 5)
     assert "Nothing to do" in status
 
 
@@ -630,7 +632,7 @@ def test_chunk_limit_survives_whatever_the_number_box_sends(
 
 @pytest.mark.parametrize("value", [None, "", "abc", 0, -3])
 def test_a_cleared_max_chunks_still_previews(value: object) -> None:
-    status, _ = app.preview(NOTES, None, value)
+    status, _, _ = app.preview(NOTES, None, value)
     assert "Estimate" in status
 
 
@@ -664,3 +666,25 @@ def test_the_header_cluster_wraps_before_it_clips() -> None:
     base = app.CSS.split(".meta{display:flex")[1].split("}")[0]
     assert "flex-wrap:wrap" in base
     assert "margin-left:auto" in base  # keeps it right-aligned once wrapped
+
+
+def test_the_header_is_re_read_on_page_load(settings: Settings) -> None:
+    """It was baked in when the Blocks were built and then froze.
+
+    A CLI or benchmark run spends from the same twenty, so a strip that only
+    updates when this page generates is exactly as misleading as the private
+    tally it replaced.
+    """
+    from flashcards import client as client_mod
+
+    client_mod.record_spend(settings, 6)
+    assert "14</b> of 20 left" in app.refresh_header()
+
+
+def test_preview_refreshes_the_count_too(settings: Settings) -> None:
+    # Preview spends nothing, but it is the natural moment to re-read.
+    from flashcards import client as client_mod
+
+    client_mod.record_spend(settings, 9)
+    _, _, header = app.preview(NOTES, None, 5)
+    assert "11</b> of 20 left" in header
