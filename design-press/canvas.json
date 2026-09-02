@@ -1,0 +1,254 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Light mode"
+    },
+    {
+      "id": "page-2",
+      "name": "Dark mode"
+    },
+    {
+      "id": "page-3",
+      "name": "Foundations"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1240,
+      "title": "Results",
+      "page": "page-1"
+    },
+    {
+      "file": "Empty.dc.html",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Empty / first load",
+      "page": "page-1"
+    },
+    {
+      "file": "Pasted.dc.html",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 860,
+      "title": "Notes pasted",
+      "page": "page-1"
+    },
+    {
+      "file": "Preview.dc.html",
+      "x": 0,
+      "y": 1400,
+      "w": 1440,
+      "h": 1000,
+      "title": "Preview - costs nothing",
+      "page": "page-1"
+    },
+    {
+      "file": "Generating.dc.html",
+      "x": 1560,
+      "y": 1400,
+      "w": 1440,
+      "h": 960,
+      "title": "Generating - the dead air",
+      "page": "page-1"
+    },
+    {
+      "file": "Partial.dc.html",
+      "x": 3120,
+      "y": 1400,
+      "w": 1440,
+      "h": 1120,
+      "title": "Partial success",
+      "page": "page-1"
+    },
+    {
+      "file": "QuotaSpent.dc.html",
+      "x": 0,
+      "y": 2680,
+      "w": 1440,
+      "h": 800,
+      "title": "Daily ration spent",
+      "page": "page-1"
+    },
+    {
+      "file": "Errors.dc.html",
+      "x": 1560,
+      "y": 2680,
+      "w": 1440,
+      "h": 820,
+      "title": "Error states",
+      "page": "page-1"
+    },
+    {
+      "file": "Cards.dc.html",
+      "x": 0,
+      "y": 3620,
+      "w": 1240,
+      "h": 940,
+      "title": "The card - click to flip",
+      "page": "page-1",
+      "is_interactive": true
+    },
+    {
+      "file": "Phone.dc.html",
+      "x": 1400,
+      "y": 3620,
+      "w": 390,
+      "h": 1500,
+      "title": "Phone - below 900px",
+      "page": "page-1"
+    },
+    {
+      "file": "MainDark.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1240,
+      "title": "Results",
+      "page": "page-2"
+    },
+    {
+      "file": "EmptyDark.dc.html",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Empty / first load",
+      "page": "page-2"
+    },
+    {
+      "file": "PreviewDark.dc.html",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 1000,
+      "title": "Preview - costs nothing",
+      "page": "page-2"
+    },
+    {
+      "file": "GeneratingDark.dc.html",
+      "x": 0,
+      "y": 1400,
+      "w": 1440,
+      "h": 960,
+      "title": "Generating - the dead air",
+      "page": "page-2"
+    },
+    {
+      "file": "QuotaSpentDark.dc.html",
+      "x": 1560,
+      "y": 1400,
+      "w": 1440,
+      "h": 800,
+      "title": "Daily ration spent",
+      "page": "page-2"
+    },
+    {
+      "file": "CardsDark.dc.html",
+      "x": 3120,
+      "y": 1400,
+      "w": 1240,
+      "h": 940,
+      "title": "The card - click to flip",
+      "page": "page-2",
+      "is_interactive": true
+    },
+    {
+      "file": "PhoneDark.dc.html",
+      "x": 0,
+      "y": 2500,
+      "w": 390,
+      "h": 1500,
+      "title": "Phone - below 900px",
+      "page": "page-2"
+    },
+    {
+      "file": "Palette.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1300,
+      "h": 900,
+      "title": "Palette - both modes, measured",
+      "page": "page-3"
+    },
+    {
+      "file": "AltTerminal.dc.html",
+      "x": 1400,
+      "y": 0,
+      "w": 760,
+      "h": 560,
+      "title": "Alternate A",
+      "page": "page-3"
+    },
+    {
+      "file": "AltEditorial.dc.html",
+      "x": 2260,
+      "y": 0,
+      "w": 760,
+      "h": 600,
+      "title": "Alternate B",
+      "page": "page-3"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "ration-note",
+      "x": 0,
+      "y": -170,
+      "w": 620,
+      "page": "page-1",
+      "text": "PRESS ROOM - riso study desk.\n\nThe daily ration strip in every header is the spine of this design: 20 ticks, filled as you spend, so the invisible budget becomes a physical object you can read at a glance."
+    },
+    {
+      "id": "money-note",
+      "x": 0,
+      "y": 1260,
+      "w": 560,
+      "page": "page-1",
+      "text": "The two buttons carry different weight on purpose. Preview is a dashed, weightless outline. Generate is a knockout block that prints its own cost on the face: 'spends 4 of your 20'."
+    },
+    {
+      "id": "deadair-note",
+      "x": 1560,
+      "y": 2380,
+      "w": 560,
+      "page": "page-1",
+      "text": "Generating names the wait instead of hiding it - 'waiting 24s for the rate limit... this pause is the limiter, not a stall'. Dead air only reads as broken when nothing explains it."
+    },
+    {
+      "id": "dark-note",
+      "x": 0,
+      "y": -170,
+      "w": 640,
+      "page": "page-2",
+      "text": "Same design, one token set swapped - nothing moves. The spot blue lightens so it still reads as the action colour, and the difficulty ramp lifts so all three stay separable on a dark card. Measured ratios are on the Foundations page."
+    },
+    {
+      "id": "quota-dark-note",
+      "x": 1560,
+      "y": 2240,
+      "w": 560,
+      "page": "page-2",
+      "text": "The ration block inverts rather than dimming: in dark mode it becomes a light slab on the dark ground, so 'you are out' still lands as the heaviest thing on the page."
+    },
+    {
+      "id": "alt-note",
+      "x": 1400,
+      "y": 680,
+      "w": 700,
+      "page": "page-3",
+      "text": "Two alternates, low-fi on purpose. Each names its own trade-off so this is a real choice and not a rigged vote. Say the word and either becomes the main direction."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-2"
+  }
+}

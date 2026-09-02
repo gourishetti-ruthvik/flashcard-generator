@@ -1,0 +1,189 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap">
+  <style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+ --paper:#f2efe4;--paper2:#fbf9f2;--ink:#1b1a17;--ink2:#413d35;--mute:#6f6858;
+ --rule:#d8d2c2;--rule2:#e7e2d5;--blue:#2b4a8b;--blued:#1d3462;
+ --orange:#ff6a3d;--oranget:#b03c12;
+ --easy:#3f6b3a;--med:#8a6410;--hard:#9c3520;
+ --disp:'Instrument Serif',Georgia,serif;--body:'Newsreader',Georgia,serif;
+ --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);-webkit-font-smoothing:antialiased}
+a{color:var(--blue)}a:hover{color:var(--blued)}
+.wrap{position:relative;background:var(--paper);padding:40px 48px 48px}
+.grain{position:absolute;inset:0;pointer-events:none;mix-blend-mode:multiply;opacity:.14;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.rel{position:relative}
+.lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);display:block}
+.hd{display:flex;align-items:flex-end;justify-content:space-between;gap:32px;padding-bottom:16px;border-bottom:3px solid var(--ink)}
+.ttl{font-family:var(--disp);font-size:74px;line-height:.86;margin:0;letter-spacing:-.012em;text-shadow:4px -3px 0 var(--orange)}
+.sub{margin:9px 0 0;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
+.ration{text-align:right;flex:0 0 auto}
+.ticks{display:flex;gap:3px;margin:8px 0 7px;justify-content:flex-end}
+.ticks i{width:9px;height:22px;border:1.5px solid var(--blue);display:block}
+.ticks i.on{background:var(--blue)}
+.ticks i.hot{background:var(--orange);border-color:var(--oranget)}
+.rn{font-family:var(--mono);font-size:11px;color:var(--ink2)}
+.rn b{color:var(--ink);font-weight:600}
+.main{display:flex;gap:44px;margin-top:28px;align-items:flex-start}
+.left{flex:0 0 400px}
+.right{flex:1 1 0;min-width:0}
+.field{margin-bottom:16px}
+.ta{background:var(--paper2);border:1.5px solid var(--ink);padding:14px 16px;font-size:14.5px;
+ line-height:1.6;color:var(--ink2);box-shadow:4px 4px 0 var(--rule)}
+.ta.ph{color:#9a9382}
+.acc{border:1.5px dashed var(--rule);padding:10px 14px;font-family:var(--mono);font-size:11.5px;
+ color:var(--mute);display:flex;justify-content:space-between;align-items:center}
+.row2{display:flex;gap:12px;align-items:flex-end}
+.inp{background:var(--paper2);border:1.5px solid var(--ink);padding:9px 12px;font-family:var(--mono);
+ font-size:13px;box-shadow:3px 3px 0 var(--rule)}
+.chk{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--ink2)}
+.box{width:15px;height:15px;border:1.5px solid var(--ink);background:var(--blue);display:inline-flex;
+ align-items:center;justify-content:center;flex:0 0 auto}
+.btn{display:block;width:100%;text-align:center;font-family:var(--mono);cursor:pointer}
+.btn-prev{border:1.5px dashed var(--blue);background:transparent;color:var(--blue);padding:13px;
+ font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+.btn-gen{border:1.5px solid var(--ink);background:var(--blue);color:var(--paper2);padding:15px;
+ font-size:13px;letter-spacing:.12em;text-transform:uppercase;box-shadow:5px 5px 0 var(--ink)}
+.btn-gen .cost{display:block;font-size:10px;letter-spacing:.1em;opacity:.85;margin-top:5px}
+.btn-dl{border:1.5px solid var(--ink);background:var(--paper2);color:var(--ink);padding:10px 18px;
+ font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+ box-shadow:3px 3px 0 var(--ink);display:inline-block;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+.card{background:var(--paper2);border:1.5px solid var(--ink);padding:16px 17px 14px;box-shadow:4px 4px 0 var(--rule)}
+.ctop{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-bottom:9px;
+ margin-bottom:11px;border-bottom:1px solid var(--rule2)}
+.topic{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute)}
+.diff{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;
+ display:inline-flex;align-items:center;gap:5px}
+.diff .ds{display:inline-flex;gap:2px}
+.diff i{width:5px;height:10px;display:block}
+.d-easy{color:var(--easy)}.d-easy i{background:var(--easy)}
+.d-med{color:var(--med)}.d-med i{background:var(--med)}
+.d-hard{color:var(--hard)}.d-hard i{background:var(--hard)}
+.q{margin:0;font-size:16.5px;line-height:1.45;font-weight:500}
+.ans{margin:0;font-size:14.5px;line-height:1.6;color:var(--ink2)}
+.cfoot{margin-top:12px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;
+ text-transform:uppercase;color:var(--blue)}
+.summary{display:flex;justify-content:space-between;align-items:center;gap:20px;
+ border-bottom:1.5px solid var(--ink);padding-bottom:12px;margin-bottom:18px}
+.stat{font-family:var(--mono);font-size:12px;color:var(--ink2)}
+.stat b{font-size:19px;color:var(--ink);font-weight:600}
+.knock{background:var(--blue);color:var(--paper2);border:1.5px solid var(--ink);padding:22px 26px;
+ box-shadow:6px 6px 0 var(--ink)}
+.knock h2{font-family:var(--disp);font-size:34px;margin:0 0 8px;line-height:1;color:var(--paper2)}
+.halftone{background-image:radial-gradient(circle at 1px 1px,rgba(43,74,139,.32) 1px,transparent 1.7px);
+ background-size:6px 6px}
+.modes{display:inline-flex;border:1.5px solid var(--ink);margin-bottom:9px}
+.m{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;font-family:var(--mono);
+ font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.m.lt{background:var(--ink);color:var(--paper)}
+.pal{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:0 16px;align-items:center}
+.pal>*{padding:7px 0;border-bottom:1px solid var(--rule2);font-family:var(--mono);font-size:12px}
+.sw{width:26px;height:18px;border:1.5px solid var(--ink)}
+
+
+  </style>
+</helmet>
+<div class="wrap" style="width:1440px">
+  <div class="grain"></div>
+  <div class="rel">
+<header class="hd">
+    <div>
+      <h1 class="ttl">Flashcards</h1>
+      <p class="sub">notes in &middot; anki out</p>
+    </div>
+    <div class="ration">
+      <div class="modes">
+        <span class="m lt"><svg width="10" height="10" viewBox="0 0 16 16" fill="none"
+          stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M8 1.2v1.6
+          M8 13.2v1.6M1.2 8h1.6M13.2 8h1.6M3.3 3.3l1.1 1.1M11.6 11.6l1.1 1.1M12.7 3.3l-1.1 1.1
+          M4.4 11.6l-1.1 1.1"/></svg>light</span><span class="m dk"><svg width="10" height="10"
+          viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path
+          d="M13.2 9.6A5.8 5.8 0 016.4 2.8a5.8 5.8 0 106.8 6.8z"/></svg>dark</span>
+      </div>
+      <span class="lbl">Daily ration</span>
+      <div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <p class="rn"><b>13</b> of 20 left &middot; resets 12:30</p>
+    </div>
+  </header>
+    <div class="main">
+      <div class="left">
+        <div class="field">
+        <span class="lbl" style="margin-bottom:7px">Notes</span>
+        <div class="ta"># Deadlocks in Operating Systems<br><br>A deadlock is a state in which a set of processes are each waiting for an event that only another process in the set can cause. None of them can proceed, and without intervention the system stays stuck indefinitely.<br><br>## The four Coffman conditions<br><br>Deadlock can arise only when all four of these hold simultaneously&hellip;</div>
+      </div>
+      <div class="field acc"><span>Upload .md or .txt</span><span>+</span></div>
+      <div class="field row2">
+        <label style="flex:1">
+          <span class="lbl" style="margin-bottom:6px">Max chunks</span>
+          <div class="inp">5</div>
+        </label>
+        <label class="chk" style="padding-bottom:10px">
+          <span class="box"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"
+            stroke="#fbf9f2" stroke-width="1.8"><path d="M1 4.6L3.4 7L8 1.8"/></svg></span>
+          Remove near-duplicates
+        </label>
+      </div>
+      <p class="rn" style="margin:0 0 14px;color:var(--mute);font-size:11px">4 chunks &middot; 4 requests &middot; ~2,400 tokens</p>
+      <div class="btn btn-prev" style="margin-bottom:12px">Preview &mdash; free</div>
+      <div class="btn btn-gen">Generate<span class="cost">spends 4 of your 20</span></div>
+      </div>
+      <div class="right">
+        <div class="knock" style="margin-bottom:22px">
+          <span class="lbl" style="color:rgba(251,249,242,.72)">Estimate &mdash; nothing spent</span>
+          <h2 style="margin-top:10px">4 chunks &middot; 4 requests &middot; ~2,400 tokens</h2>
+          <p style="margin:6px 0 16px;font-size:15px;color:rgba(251,249,242,.9)">
+            That is 4 of the 13 you have left today. About 20 cards.</p>
+          <div class="ticks" style="justify-content:flex-start;margin:0">
+            <i class="on" style="border-color:#fbf9f2;background:rgba(251,249,242,.35)"></i><i class="on" style="border-color:#fbf9f2;background:rgba(251,249,242,.35)"></i><i class="on" style="border-color:#fbf9f2;background:rgba(251,249,242,.35)"></i><i class="on" style="border-color:#fbf9f2;background:rgba(251,249,242,.35)"></i><i class="on" style="border-color:#fbf9f2;background:rgba(251,249,242,.35)"></i><i class="on" style="border-color:#fbf9f2;background:rgba(251,249,242,.35)"></i><i class="on" style="border-color:#fbf9f2;background:rgba(251,249,242,.35)"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          </div>
+          <p style="margin:10px 0 0;font-family:var(--mono);font-size:11px;
+            color:rgba(251,249,242,.82)">
+            &#9632; already spent &nbsp; &#9633; still yours</p>
+        </div>
+        <span class="lbl" style="margin-bottom:10px">How it splits</span>
+        <div>
+          <div style="display:flex;justify-content:space-between;gap:16px;padding:11px 0;
+            border-bottom:1px solid var(--rule2)">
+            <span style="font-size:15px">Deadlocks in Operating Systems</span>
+            <span style="font-family:var(--mono);font-size:12px;color:var(--oranget)">
+              53 tok &middot; thin</span></div>
+          <div style="display:flex;justify-content:space-between;gap:16px;padding:11px 0;
+            border-bottom:1px solid var(--rule2)">
+            <span style="font-size:15px">The four Coffman conditions</span>
+            <span style="font-family:var(--mono);font-size:12px;color:var(--mute)">
+              157 tok</span></div>
+          <div style="display:flex;justify-content:space-between;gap:16px;padding:11px 0;
+            border-bottom:1px solid var(--rule2)">
+            <span style="font-size:15px">Prevention versus avoidance</span>
+            <span style="font-family:var(--mono);font-size:12px;color:var(--mute)">
+              224 tok</span></div>
+          <div style="display:flex;justify-content:space-between;gap:16px;padding:11px 0;
+            border-bottom:1px solid var(--rule2)">
+            <span style="font-size:15px">Detection and recovery</span>
+            <span style="font-family:var(--mono);font-size:12px;color:var(--mute)">
+              157 tok</span></div>
+        </div>
+        <p style="margin:16px 0 0;font-size:14px;color:var(--ink2);max-width:52ch;line-height:1.6">
+          One chunk is thin &mdash; a 53-token preamble before the first heading. It still
+          costs a full request. Trim it, or accept a weaker card or two.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

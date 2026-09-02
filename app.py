@@ -1,400 +1,288 @@
 """Gradio web front end, served in a browser.
 
-Ruled Paper: warm paper ground, Newsreader serif, cards drawn as index cards
-with a coloured margin rule. Two columns on a desktop window -- the form on the
-left, results on the right -- collapsing to one column below 900px.
+Press Room: a riso-print study desk. Warm newsprint ground, two spot inks,
+grain, and display type offset the way a misregistered print run looks. Two
+columns on a desktop window -- the form on the left, results on the right --
+collapsing to one column below 900px.
+
+The spine of the design is the daily ration: twenty tick marks in the header
+that fill as requests are spent, because the free tier's 20-a-day cap is the
+constraint that governs everything and it is otherwise invisible until it bites.
+The count is real, persisted per Pacific day, not decoration -- though it counts
+only what this front end spends. A CLI or benchmark run draws on the same quota
+without moving the strip, so the honest reading is "what the website has used
+today", not "what is left". Making it exact means counting inside the client
+wrapper, where every call already routes.
 
 All real work is done by the same package the CLI uses; the key is read
 server-side and never reaches the browser. Everything non-interactive is
 rendered as inline-styled HTML rather than Gradio components: it is the only way
 to control the layout precisely, and inline styles are immune to Gradio's own
-stylesheet.
+stylesheet. Colours are referenced as CSS custom properties rather than literal
+hex so that one token swap gives the whole page a dark mode.
 """
 
 from __future__ import annotations
 
 import html
+import json
 import os
 import tempfile
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import gradio as gr
 from google.genai import errors
 
 from flashcards import dedupe, exporter, pipeline
 from flashcards.chunker import estimate_tokens
-from flashcards.client import GeminiClient
+from flashcards.client import GeminiClient, is_daily_cap
 from flashcards.config import ConfigError, Settings, load_settings
 from flashcards.models import Chunk, SourcedCard
 
+# --- the ration ------------------------------------------------------------
+
+DAILY_CAP = 20
+# Measured from the API's own QuotaFailure: GenerateRequestsPerDayPerProject-
+# PerModel-FreeTier, quotaValue 20. The window rolls over at midnight US
+# Pacific, not local midnight -- probed once a minute for four minutes at the
+# cap and it never reopened early, so the boundary is a hard daily reset.
+PACIFIC = ZoneInfo("America/Los_Angeles")
+
+
+def quota_day() -> str:
+    return datetime.now(PACIFIC).strftime("%Y-%m-%d")
+
+
+def resets_in() -> str:
+    now = datetime.now(PACIFIC)
+    midnight = (now + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    minutes = int((midnight - now).total_seconds()) // 60
+    hours, mins = divmod(minutes, 60)
+    return f"{hours}h {mins}m" if hours else f"{mins}m"
+
+
+def _usage_file(settings: Settings) -> Path:
+    return settings.cache_dir / "daily-usage.json"
+
+
+def read_spent(settings: Settings) -> int:
+    """Requests already spent in the current Pacific day.
+
+    A missing or corrupt file reads as zero rather than raising: the ration is
+    an aid, and refusing to render the page because a counter is unparsable
+    would be worse than briefly under-reporting it.
+    """
+    try:
+        data = json.loads(_usage_file(settings).read_text(encoding="utf-8"))
+        return int(data.get(quota_day(), 0))
+    except (OSError, ValueError, TypeError):
+        return 0
+
+
+def add_spent(settings: Settings, count: int) -> int:
+    if count <= 0:
+        return read_spent(settings)
+    total = read_spent(settings) + count
+    path = _usage_file(settings)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Only today's key is kept; yesterday's count answers no question worth
+        # the file growing forever.
+        path.write_text(json.dumps({quota_day(): total}), encoding="utf-8")
+    except OSError:
+        pass
+    return total
+
+
 # --- design tokens ---------------------------------------------------------
 
-PAPER = "#faf7f2"
-CARD_BG = "#fffdfa"
-INK = "#23201c"
-INK_2 = "#4a443b"
-INK_3 = "#6d6559"
-RULE = "#d9d2c6"
-RULE_2 = "#e6e0d5"
-MUTE = "#8c8578"
-FAINT = "#a49c8f"
-# Difficulty is a sequential ramp, cool to hot, and every step clears WCAG AA
-# on the card ground (5.03, 5.32, 7.03). The previous easy and hard were three
-# degrees apart in hue -- the same colour to the eye -- and medium sat at 2.89,
-# unreadable at the 10.5px label size.
-SAGE = "#5b7553"
-OCHRE = "#8f6116"
-OXBLOOD = "#9c3520"
+# Every ratio was measured against the surface it actually sits on, not
+# asserted: this project has twice shipped colours that looked fine and failed
+# AA. The tightest pairs are light `med` at 5.10:1 and dark `mute` at 4.61:1.
+LIGHT_TOKENS = (
+    "--paper:#f2efe4;--paper2:#fbf9f2;--ink:#1b1a17;--ink2:#413d35;"
+    "--mute:#6f6858;--rule:#d8d2c2;--rule2:#e7e2d5;--blue:#2b4a8b;"
+    "--blued:#1d3462;--orange:#ff6a3d;--oranget:#b03c12;--warmbg:#fdf0e8;"
+    "--easy:#3f6b3a;--med:#8a6410;--hard:#9c3520;--shadow:#d8d2c2;"
+    "--knockfg:#fbf9f2;--grainblend:multiply;--grainop:.14"
+)
+DARK_TOKENS = (
+    "--paper:#171612;--paper2:#211f19;--ink:#f1ede1;--ink2:#c9c3b3;"
+    "--mute:#8e8776;--rule:#38342b;--rule2:#2b2820;--blue:#89a9e4;"
+    "--blued:#a8c0ee;--orange:#ff8a5c;--oranget:#ff9d75;--warmbg:#2a211b;"
+    "--easy:#8fc088;--med:#e0b45a;--hard:#e69182;--shadow:#0e0d0a;"
+    "--knockfg:#171612;--grainblend:screen;--grainop:.07"
+)
 
-# Actions are a separate hue entirely, so an "easy" card's edge never reads as a
-# button. Blue ink on ruled paper is also what the metaphor wants. The estimate
-# confirmation uses it too: green there was the same sage as "easy", which read
-# as card metadata rather than the app speaking.
-ACCENT = "#2c4a6b"
-ACCENT_TINT = "#eef2f7"
-ACCENT_EDGE = "#dde5ee"
-
-# level -> (margin-rule colour, filled squares)
-DIFFICULTY = {"easy": (SAGE, 1), "medium": (OCHRE, 2), "hard": (OXBLOOD, 3)}
+DIFFICULTY = {"easy": 1, "medium": 2, "hard": 3}
+DIFF_VAR = {"easy": "--easy", "medium": "--med", "hard": "--hard"}
 
 SERIF = "'Newsreader', Georgia, serif"
+DISP = "'Instrument Serif', Georgia, serif"
 MONO = "'IBM Plex Mono', ui-monospace, monospace"
 
 FONTS = (
-    "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500"
+    "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600"
+    "&family=Instrument+Serif:ital@0;1"
     "&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap"
+)
+
+GRAIN = (
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E"
+    "%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' "
+    "numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' "
+    "filter='url(%23n)'/%3E%3C/svg%3E\")"
+)
+
+LBL = (
+    f"font-family:{MONO};font-size:10px;letter-spacing:.14em;"
+    "text-transform:uppercase;color:var(--mute)"
 )
 
 CSS = f"""
 @import url('{FONTS}');
 
-body {{
-  background: {PAPER} !important;
-  font-family: {SERIF} !important;
-  margin: 0 !important;
-  padding: 0 !important;
+:root{{{LIGHT_TOKENS}}}
+/* Default follows the OS while the toggle is untouched; either pill then wins
+   over it, which is why the explicit rules are declared last. */
+@media (prefers-color-scheme: dark){{
+  body:not(:has(#m-light:checked)):not(:has(#m-dark:checked)){{{DARK_TOKENS}}}
 }}
-/* Padding lives on the container only. Setting it on body as well subtracted
-   112px twice and the page came out 1068 wide instead of 1180. */
-.gradio-container {{
-  /* transparent, not paper: the animated ground is a fixed layer behind this,
-     and a solid container background would paint straight over it. */
-  background: transparent !important;
-  font-family: {SERIF} !important;
-  color: {INK} !important;
-  box-sizing: border-box !important;
-  width: 100% !important;
-  max-width: 1180px !important;
-  margin: 0 auto !important;
-  padding: 0 56px 56px !important;
-  position: relative !important;
-  z-index: 1 !important;
+body:has(#m-dark:checked){{{DARK_TOKENS}}}
+body:has(#m-light:checked){{{LIGHT_TOKENS}}}
+
+body{{background:var(--paper);margin:0}}
+/* The ground carries its own opaque paper: the grain multiplies, and over a
+   transparent layer that turned the whole page almost black. */
+#ground{{position:fixed;inset:0;z-index:0;pointer-events:none;background:var(--paper)}}
+#ground .grain{{position:absolute;inset:0;mix-blend-mode:var(--grainblend);
+ opacity:var(--grainop);background-image:{GRAIN}}}
+#ground .bloom{{position:absolute;border-radius:50%;filter:blur(90px);opacity:.30}}
+#ground .b1{{width:460px;height:460px;left:-120px;top:-140px;background:var(--blue);
+ opacity:.055;animation:drift1 54s ease-in-out infinite}}
+#ground .b2{{width:400px;height:400px;right:-100px;bottom:-120px;background:var(--orange);
+ opacity:.05;animation:drift2 67s ease-in-out infinite}}
+@keyframes drift1{{0%,100%{{transform:translate(0,0)}}50%{{transform:translate(70px,50px)}}}}
+@keyframes drift2{{0%,100%{{transform:translate(0,0)}}50%{{transform:translate(-60px,-45px)}}}}
+#groundwrap{{position:static !important;height:0 !important;margin:0 !important;
+ padding:0 !important;overflow:visible !important}}
+
+/* Gradio caps the container at 854px; without this the two columns never fit. */
+.gradio-container{{background:transparent !important;position:relative;z-index:1;
+ width:100% !important;max-width:1440px !important;padding:26px 40px 46px !important;
+ font-family:{SERIF} !important}}
+.gradio-container .prose,.block,.form{{background:transparent !important;border:none !important}}
+.gap,.panel{{background:transparent !important}}
+.gradio-container > .main{{max-width:none !important;padding:0 !important}}
+/* The loading tracker keeps its box while hidden, leaving a 68px gap. */
+.wrap.hide{{display:none !important}}
+
+#main{{gap:44px !important;align-items:flex-start !important}}
+#left{{flex:0 0 400px !important;position:sticky;top:20px;
+ max-height:calc(100vh - 44px);overflow-y:auto;overflow-x:hidden}}
+/* flex-basis:auto lets the card grid size the column by its content, which blew
+   the right column past the container. */
+#right{{flex:1 1 0 !important;min-width:0}}
+@media (max-width:900px){{
+  #main{{flex-direction:column !important}}
+  /* The header is inline-styled flex; at 375px the 20-tick ration ran off the
+     right edge and the counter was clipped. Inline styles lose to !important. */
+  .hd{{flex-direction:column !important;align-items:flex-start !important;gap:14px}}
+  .hd h1{{font-size:46px !important}}
+  .ration{{text-align:left !important;width:100%}}
+  .ticks{{justify-content:flex-start !important}}
+  #left{{flex:1 1 auto !important;position:static;max-height:none;width:100%}}
+  .gradio-container{{padding:20px 18px 34px !important}}
 }}
 
-/* --- drifting ledger: the animated ground ------------------------------- */
-#ground {{
-  position: fixed !important; inset: 0 !important;
-  z-index: 0 !important; pointer-events: none !important;
-  overflow: hidden !important; margin: 0 !important; padding: 0 !important;
-  /* The grain multiplies, so the layer needs its own paper to composite
-     against. Without this it multiplies the whole page down to near-black. */
-  background: {PAPER} !important;
-}}
-#ground .bloom {{ position: absolute; border-radius: 50%; filter: blur(70px); }}
-#ground .b1 {{ width: 560px; height: 560px; left: -160px; top: -180px;
-  background: rgba(44,74,107,.13); animation: drift-a 30s ease-in-out infinite alternate; }}
-#ground .b2 {{ width: 480px; height: 480px; right: -170px; top: 150px;
-  background: rgba(91,117,83,.13); animation: drift-b 38s ease-in-out infinite alternate; }}
-#ground .b3 {{ width: 440px; height: 440px; left: 42%; bottom: -200px;
-  background: rgba(156,53,32,.09); animation: drift-c 34s ease-in-out infinite alternate; }}
-@keyframes drift-a {{ to {{ transform: translate(90px, 60px) scale(1.12); }} }}
-@keyframes drift-b {{ to {{ transform: translate(-70px, -50px) scale(1.08); }} }}
-@keyframes drift-c {{ to {{ transform: translate(60px, -70px) scale(1.14); }} }}
+/* Gradio nests the textarea inside its label, so hiding `label` hides the input. */
+#notes label > span{{display:none}}
+#notes textarea{{background:var(--paper2) !important;border:1.5px solid var(--ink) !important;
+ border-radius:0 !important;box-shadow:4px 4px 0 var(--shadow);color:var(--ink2) !important;
+ font-family:{SERIF} !important;font-size:14.5px !important;line-height:1.6 !important;
+ padding:14px 16px !important;max-height:300px}}
+#notes textarea::placeholder{{color:var(--mute) !important}}
+#notes textarea:focus{{outline:2px solid var(--blue);outline-offset:2px}}
 
-#ground .rules {{ position: absolute; left: 0; right: 0; top: -60px; bottom: -60px;
-  background-image: repeating-linear-gradient(
-    transparent 0 27px, rgba(35,32,28,.05) 27px 28px);
-  animation: creep 90s linear infinite; }}
-@keyframes creep {{ to {{ transform: translateY(-28px); }} }}
+#upload{{border:1.5px dashed var(--rule) !important;border-radius:0 !important;
+ background:transparent !important;margin-top:14px}}
+#upload button, #upload .label-wrap span{{font-family:{MONO} !important;font-size:11.5px !important;
+ letter-spacing:.1em;text-transform:uppercase;color:var(--mute) !important}}
 
-#ground .grain {{ position: absolute; inset: -60px; opacity: .14;
-  mix-blend-mode: multiply;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
-  animation: grain-shift 8s steps(6) infinite; }}
-@keyframes grain-shift {{
-  0% {{ transform: translate(0, 0); }} 50% {{ transform: translate(-14px, 9px); }}
-  100% {{ transform: translate(7px, -11px); }}
-}}
-#groundwrap {{ height: 0 !important; margin: 0 !important; padding: 0 !important;
-               overflow: visible !important; }}
-#upload {{ overflow: hidden !important; }}
-footer, .show-api, .built-with {{ display: none !important; }}
-.gradio-container .wrap.hide {{ display: none !important; }}
+#maxchunks label span,#dedupe label span{{font-family:{MONO} !important;font-size:10px !important;
+ letter-spacing:.14em;text-transform:uppercase;color:var(--mute) !important}}
+#maxchunks input{{background:var(--paper2) !important;border:1.5px solid var(--ink) !important;
+ border-radius:0 !important;box-shadow:3px 3px 0 var(--shadow);color:var(--ink) !important;
+ font-family:{MONO} !important}}
+#dedupe input[type=checkbox]{{border:1.5px solid var(--ink) !important;border-radius:0 !important;
+ background:var(--paper2) !important}}
+#dedupe input[type=checkbox]:checked{{background:var(--blue) !important}}
 
-/* Gradio 6 ships a dark zinc theme on its own wrappers, which showed through
-   the paper ground as grey boxes round every control. */
-#left .block, #left .form, #right .block, #right .form,
-#maxchunks, #dedupe {{
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-}}
+#previewbtn,#genbtn,#dlbtn{{border-radius:0 !important;font-family:{MONO} !important;
+ letter-spacing:.13em;text-transform:uppercase}}
+#previewbtn{{background:transparent !important;border:1.5px dashed var(--blue) !important;
+ color:var(--blue) !important;font-size:12px !important;padding:13px !important}}
+#previewbtn:hover{{background:var(--paper2) !important}}
+#genbtn{{background:var(--blue) !important;border:1.5px solid var(--ink) !important;
+ color:var(--knockfg) !important;font-size:12.5px !important;padding:15px !important;
+ box-shadow:5px 5px 0 var(--ink);transition:transform .12s,box-shadow .12s}}
+#genbtn:hover{{transform:translate(2px,2px);box-shadow:3px 3px 0 var(--ink)}}
+#dlbtn{{background:var(--paper2) !important;border:1.5px solid var(--ink) !important;
+ color:var(--ink) !important;font-size:11px !important;box-shadow:3px 3px 0 var(--ink);
+ min-width:0 !important;flex:0 0 auto !important}}
 
-/* Gradio nests the row inside four wrappers that each narrow it -- 985 down to
-   768 down to 704 -- so the results column was starved and two card columns
-   never fit. :has() widens only the chain containing our row, leaving every
-   other .wrap and .column (including #left and #right) alone. It also puts an
-   inline min-width:min(320px,100%) on Columns, which overrode the sidebar. */
-.gradio-container .main:has(#main),
-.gradio-container .wrap:has(#main),
-.gradio-container main.contain:has(#main),
-.gradio-container .column:has(> #main) {{
-  width: 100% !important;
-  max-width: none !important;
-  padding-left: 0 !important;
-  padding-right: 0 !important;
+/* The mode pills are three radios, so "auto" can follow the OS and either pill
+   can override it. No JavaScript: the whole switch is :has(). */
+#m-light,#m-dark{{position:absolute;opacity:0;width:0;height:0;pointer-events:none}}
+.modes{{display:inline-flex;border:1.5px solid var(--ink);margin-bottom:9px}}
+.m{{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;font-family:{MONO};
+ font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);cursor:pointer}}
+.m.lt{{background:var(--ink);color:var(--paper)}}
+@media (prefers-color-scheme: dark){{
+  body:not(:has(#m-light:checked)):not(:has(#m-dark:checked)) .m.lt{{
+    background:transparent;color:var(--mute)}}
+  body:not(:has(#m-light:checked)):not(:has(#m-dark:checked)) .m.dk{{
+    background:var(--ink);color:var(--paper)}}
 }}
-#main {{ gap: 44px !important; align-items: flex-start !important;
-        width: 100% !important; }}
-#left {{
-  flex: 0 0 280px !important;
-  min-width: 280px !important;
-  position: sticky !important;
-  top: 24px !important;
-  max-height: calc(100vh - 48px) !important;
-  overflow-y: auto !important;
-}}
-#right {{ flex: 1 1 0 !important; min-width: 0 !important;
-          width: auto !important; }}
-#left > *, #right > * {{ background: transparent !important; border: none !important; }}
-#left {{ gap: 0 !important; }}
+body:has(#m-dark:checked) .m.lt{{background:transparent;color:var(--mute)}}
+body:has(#m-dark:checked) .m.dk{{background:var(--ink);color:var(--paper)}}
+body:has(#m-light:checked) .m.lt{{background:var(--ink);color:var(--paper)}}
+body:has(#m-light:checked) .m.dk{{background:transparent;color:var(--mute)}}
 
-/* notes */
-#notes textarea {{
-  background: {CARD_BG} !important;
-  border: 1px solid {RULE} !important;
-  border-radius: 2px !important;
-  color: {INK_2} !important;
-  font-family: {SERIF} !important;
-  font-size: 14px !important;
-  line-height: 1.62 !important;
-  padding: 14px 16px !important;
-  max-height: 260px !important;
-  box-shadow: none !important;
-}}
-#notes textarea::placeholder {{ color: {FAINT} !important; }}
-#notes textarea:focus {{ border-color: {INK_3} !important; outline: none !important; }}
-#notes label > span {{ display: none !important; }}
+/* Cards stack in a grid cell rather than being absolutely positioned, so the
+   card takes the height of its taller face instead of a fixed one. */
+.fc{{display:block;perspective:1300px;cursor:pointer}}
+.fc input{{position:absolute;opacity:0;width:0;height:0}}
+.fc-inner{{display:grid;transition:transform .58s cubic-bezier(.2,.8,.2,1);
+ transform-style:preserve-3d}}
+.fc input:checked ~ .fc-inner{{transform:rotateY(180deg)}}
+.fc-face{{grid-area:1/1;backface-visibility:hidden;-webkit-backface-visibility:hidden;
+ background:var(--paper2);border:1.5px solid var(--ink);padding:15px 16px 13px;
+ box-shadow:4px 4px 0 var(--shadow);display:flex;flex-direction:column;gap:11px}}
+.fc-back{{transform:rotateY(180deg);
+ background-image:radial-gradient(circle at 1px 1px,rgba(43,74,139,.09) 1px,transparent 1.7px);
+ background-size:6px 6px}}
+/* backwards, not both: `both` pins the final keyframe forever and outranks the
+   hover transform, which is why the lift silently never worked. */
+.fc{{animation:fcin .42s cubic-bezier(.2,.8,.2,1) backwards}}
+@keyframes fcin{{from{{opacity:0;transform:translateY(9px)}}to{{opacity:1;transform:none}}}}
+.fc:hover .fc-inner{{transform:translateY(-3px)}}
+.fc:hover input:checked ~ .fc-inner{{transform:translateY(-3px) rotateY(180deg)}}
+.fc:focus-within .fc-face{{outline:2px solid var(--blue);outline-offset:2px}}
 
-/* upload */
-#upload {{
-  background: {CARD_BG} !important;
-  border: 1px solid {RULE} !important;
-  border-radius: 2px !important;
-  margin-top: 14px !important;
-}}
-#upload button, #upload .label-wrap {{
-  color: {INK_3} !important;
-  font-family: {SERIF} !important;
-  font-size: 14px !important;
-  font-weight: 400 !important;
-  min-height: 46px !important;
-}}
-#upload, #upload * {{ min-width: 0 !important; max-width: 100% !important; }}
-
-/* controls */
-#controls {{ margin-top: 18px !important; gap: 10px !important; }}
-#maxchunks label, #dedupe label {{
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: 12px !important;
-  width: 100% !important;
-  margin: 0 !important;
-}}
-#dedupe label {{ flex-direction: row-reverse !important; }}
-#maxchunks label span, #dedupe label span {{
-  color: {INK} !important;
-  font-family: {SERIF} !important;
-  font-size: 14.5px !important;
-  font-weight: 400 !important;
-  margin: 0 !important;
-}}
-#maxchunks input {{
-  background: {CARD_BG} !important;
-  border: 1px solid {RULE} !important;
-  border-radius: 2px !important;
-  color: {INK} !important;
-  font-family: {MONO} !important;
-  font-size: 15px !important;
-  height: 38px !important;
-  width: 74px !important;
-  flex: 0 0 74px !important;
-  text-align: center !important;
-  padding: 0 !important;
-}}
-#dedupe input[type="checkbox"] {{
-  appearance: none !important; -webkit-appearance: none !important;
-  width: 42px !important; height: 24px !important;
-  flex: 0 0 42px !important;
-  border-radius: 12px !important;
-  background: {RULE} !important;
-  border: none !important;
-  position: relative !important;
-  cursor: pointer !important;
-  transition: background .15s ease !important;
-}}
-#dedupe input[type="checkbox"]::after {{
-  content: ""; position: absolute; top: 3px; left: 3px;
-  width: 18px; height: 18px; border-radius: 9px; background: {CARD_BG};
-  transition: transform .15s ease;
-}}
-#dedupe input[type="checkbox"]:checked {{ background: {ACCENT} !important; }}
-#dedupe input[type="checkbox"]:checked::after {{ transform: translateX(18px); }}
-
-/* buttons */
-#previewbtn, #genbtn, #dlbtn {{
-  font-family: {SERIF} !important;
-  border-radius: 2px !important;
-  box-shadow: none !important;
-  margin-top: 9px !important;
-}}
-#previewbtn {{
-  background: transparent !important;
-  border: 1px solid {INK} !important;
-  color: {INK} !important;
-  min-height: 44px !important;
-  font-size: 15px !important;
-  font-weight: 400 !important;
-}}
-#genbtn {{
-  background: {INK} !important;
-  border: none !important;
-  color: {PAPER} !important;
-  min-height: 48px !important;
-  font-size: 15px !important;
-  font-weight: 500 !important;
-}}
-#dlbtn {{
-  background: {ACCENT} !important;
-  border: none !important;
-  color: {CARD_BG} !important;
-  min-height: 44px !important;
-  font-family: {MONO} !important;
-  font-size: 13px !important;
-  letter-spacing: .04em !important;
-}}
-#genbtn:hover {{ background: #3a352e !important; }}
-#dlbtn:hover {{ background: #213952 !important; }}
-
-/* Flip cards. A hidden checkbox inside the label drives a 3D rotation, so the
-   whole thing is CSS: no JavaScript, and the card stays keyboard-operable
-   because the checkbox keeps focus and space toggles it. */
-.fc {{
-  display: block;
-  min-height: 200px;
-  perspective: 1400px;
-  cursor: pointer;
-  transition: transform .25s ease;
-  /* backwards, not both: with `both` the entrance keyframe's `transform: none`
-     persists after the animation, and an animated value beats a normal one in
-     the cascade -- so the hover lift below silently never applied. */
-  animation: fc-in .4s cubic-bezier(.2,.8,.2,1) backwards;
-}}
-.fc:hover {{ transform: translateY(-3px); }}
-.fc input {{ position: absolute; opacity: 0; width: 0; height: 0; }}
-/* Both faces sit in the same grid cell rather than stacked with position
-   absolute. The cell is as tall as the taller face, so the card sizes itself
-   and no answer has to scroll inside a fixed box. */
-.fc-inner {{
-  display: grid;
-  width: 100%; height: 100%;
-  transform-style: preserve-3d;
-  transition: transform .6s cubic-bezier(.2,.75,.2,1);
-}}
-.fc input:checked ~ .fc-pop .fc-inner {{ transform: rotateY(180deg); }}
-/* The rise at the halfway point cannot be a transition -- transitions run
-   monotonically between two values. It is a keyframe on a wrapper, applied only
-   while checked; unchecking drops the animation, and since the keyframe ends at
-   scale(1) there is nothing to snap back from. */
-.fc-pop {{ width: 100%; height: 100%; transform-style: preserve-3d; }}
-.fc input:checked ~ .fc-pop {{ animation: fc-pop .62s cubic-bezier(.2,.75,.2,1); }}
-@keyframes fc-pop {{
-  0% {{ transform: scale(1); }} 50% {{ transform: scale(1.07); }}
-  100% {{ transform: scale(1); }}
-}}
-.fc-face {{
-  grid-area: 1 / 1;
-  backface-visibility: hidden; -webkit-backface-visibility: hidden;
-  background: {CARD_BG};
-  border: 1px solid {RULE};
-  border-radius: 2px;
-  padding: 16px 18px;
-  display: flex; flex-direction: column; gap: 11px;
-  overflow: hidden;
-  transition: box-shadow .25s ease, border-color .25s ease;
-}}
-/* A light band crosses the face on hover and again while it turns. */
-.fc-face::after {{
-  content: ""; position: absolute; inset: -40%; pointer-events: none;
-  background: linear-gradient(115deg, transparent 40%,
-    rgba(255,255,255,.62) 50%, transparent 60%);
-  transform: translateX(-130%);
-}}
-.fc:hover .fc-face::after {{ animation: fc-sheen 1.05s ease; }}
-.fc input:checked ~ .fc-pop .fc-face::after {{ animation: fc-sheen .62s ease; }}
-@keyframes fc-sheen {{ to {{ transform: translateX(130%); }} }}
-.fc:hover .fc-face {{
-  box-shadow: 0 8px 22px rgba(35,32,28,.10);
-  border-color: {MUTE};
-}}
-.fc input:focus-visible ~ .fc-pop .fc-face {{
-  outline: 2px solid {ACCENT}; outline-offset: 2px;
-}}
-/* The affordance answers back. Without this the card lifts but the thing that
-   says "flip for answer" stays inert, so nothing confirms what the click does.
-   Focus gets the same treatment, or keyboard users never see it. */
-.flip-hint {{ transition: color .2s ease; }}
-.flip-hint svg {{ transition: transform .45s cubic-bezier(.2,.8,.2,1); }}
-.fc:hover .flip-hint,
-.fc input:focus-visible ~ .fc-pop .flip-hint {{ color: {INK} !important; }}
-.fc:hover .flip-hint svg,
-.fc input:focus-visible ~ .fc-pop .flip-hint svg {{ transform: rotate(-180deg); }}
-@media (prefers-reduced-motion: reduce) {{
-  .flip-hint, .flip-hint svg {{ transition: none !important; }}
-}}
-/* The reverse of an index card is ruled. Line-height matches the rule pitch so
-   the answer sits on the lines. */
-.fc-back {{
-  transform: rotateY(180deg);
-  background-image: repeating-linear-gradient(
-    {CARD_BG} 0 27px, #ece5d8 27px 28px);
-  background-position: 0 52px;
-}}
-@keyframes fc-in {{
-  from {{ opacity: 0; transform: translateY(26px) rotateX(-14deg) scale(.94); }}
-  to {{ opacity: 1; transform: none; }}
-}}
-@media (prefers-reduced-motion: reduce) {{
-  .fc, .fc-inner, .fc-pop, .fc-face, .fc-face::after,
-  #ground .bloom, #ground .rules, #ground .grain {{
-    transition: none !important; animation: none !important; }}
-}}
-
-@media (max-width: 900px) {{
-  .gradio-container, body {{ padding: 0 24px 40px !important; }}
-  #main {{ flex-direction: column !important; gap: 0 !important; }}
-  #left {{ position: static !important; flex: 1 1 auto !important; width: 100% !important;
-           max-height: none !important; overflow-y: visible !important; }}
-  #right {{ width: 100% !important; padding-top: 30px !important; }}
+@media (prefers-reduced-motion: reduce){{
+  #ground .bloom{{animation:none}}
+  .fc,.fc-inner{{animation:none;transition:none}}
+  .fc:hover .fc-inner{{transform:none}}
+  .fc:hover input:checked ~ .fc-inner{{transform:rotateY(180deg)}}
+  #genbtn{{transition:none}}
 }}
 """
-
-LBL = (
-    f"font-family:{MONO};font-size:10.5px;letter-spacing:.12em;"
-    f"text-transform:uppercase;color:{MUTE}"
-)
 
 
 # --- rendering helpers -----------------------------------------------------
@@ -404,198 +292,279 @@ def _esc(text: str) -> str:
     return html.escape(text, quote=False)
 
 
-def meter(difficulty: str) -> str:
-    """Filled and hollow squares, plus the word.
+_SUN = (
+    '<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+    'stroke-width="1.5"><circle cx="8" cy="8" r="3"></circle><path d="M8 1.2v1.6M8 13.2v1.6'
+    'M1.2 8h1.6M13.2 8h1.6M3.3 3.3l1.1 1.1M11.6 11.6l1.1 1.1M12.7 3.3l-1.1 1.1'
+    'M4.4 11.6l-1.1 1.1"></path></svg>'
+)
+_MOON = (
+    '<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+    'stroke-width="1.5"><path d="M13.2 9.6A5.8 5.8 0 016.4 2.8a5.8 5.8 0 106.8 6.8z"></path></svg>'
+)
 
-    The count carries the level, so it survives greyscale and colour blindness.
-    The card's margin rule is what carries the colour.
+
+def ticks_html(spent: int, cap: int = DAILY_CAP) -> str:
+    """The ration strip: one mark per request in the day's allowance."""
+    marks = []
+    for index in range(cap):
+        if index < spent:
+            fill = "var(--orange)" if spent >= cap else "var(--blue)"
+            edge = "var(--oranget)" if spent >= cap else "var(--blue)"
+            marks.append(
+                f'<i style="width:9px;height:20px;display:block;background:{fill};'
+                f'border:1.5px solid {edge}"></i>'
+            )
+        else:
+            marks.append(
+                '<i style="width:9px;height:20px;display:block;'
+                'border:1.5px solid var(--blue)"></i>'
+            )
+    return (
+        '<div class="ticks" style="display:flex;gap:3px;margin:8px 0 7px;justify-content:flex-end;'
+        f'flex-wrap:wrap">{"".join(marks)}</div>'
+    )
+
+
+def header_html(spent: int) -> str:
+    left = max(0, DAILY_CAP - spent)
+    note = (
+        f'<b style="color:var(--ink);font-weight:600">{left}</b> of {DAILY_CAP} left '
+        f"&middot; resets in {resets_in()}"
+        if left
+        else f"<b style=\"color:var(--oranget);font-weight:600\">none left</b> "
+        f"&middot; resets in {resets_in()}"
+    )
+    return (
+        # No "auto" radio: the absence of a choice is auto. A third radio
+        # carrying `checked` relies on that attribute surviving Gradio's
+        # re-render of the block, and it did not.
+        '<input type="radio" name="fcmode" id="m-light">'
+        '<input type="radio" name="fcmode" id="m-dark">'
+        '<header class="hd" style="display:flex;align-items:flex-end;justify-content:space-between;'
+        'gap:32px;padding-bottom:16px;border-bottom:3px solid var(--ink)">'
+        "<div>"
+        f'<h1 style="font-family:{DISP};font-size:64px;line-height:.86;margin:0;'
+        'letter-spacing:-.012em;color:var(--ink);text-shadow:4px -3px 0 var(--orange)">'
+        "Flashcards</h1>"
+        f'<p style="margin:9px 0 0;font-family:{MONO};font-size:11px;letter-spacing:.16em;'
+        'text-transform:uppercase;color:var(--mute)">notes in &middot; anki out</p></div>'
+        '<div class="ration" style="text-align:right;flex:0 0 auto">'
+        '<div class="modes">'
+        f'<label for="m-light" class="m lt">{_SUN}light</label>'
+        f'<label for="m-dark" class="m dk">{_MOON}dark</label></div>'
+        f'<span style="{LBL};display:block">Daily ration</span>'
+        f"{ticks_html(spent)}"
+        f'<p style="margin:0;font-family:{MONO};font-size:11px;color:var(--ink2)">{note}</p>'
+        "</div></header>"
+    )
+
+
+def dtag(difficulty: str) -> str:
+    """Marks plus the word.
+
+    The count carries the level, so it survives greyscale, a screenshot, and
+    colour blindness. Colour only reinforces it.
     """
-    filled = DIFFICULTY.get(difficulty, (MUTE, 0))[1]
-    squares = "".join(
-        f'<span style="width:7px;height:7px;background:{INK}"></span>'
+    filled = DIFFICULTY.get(difficulty, 0)
+    var = DIFF_VAR.get(difficulty, "--mute")
+    marks = "".join(
+        f'<i style="width:5px;height:10px;display:block;background:var({var})"></i>'
         if index < filled
-        else '<span style="width:7px;height:7px;border:1px solid #b9b1a3"></span>'
+        else '<i style="width:5px;height:10px;display:block;border:1px solid var(--rule)"></i>'
         for index in range(3)
     )
     return (
-        f'<div style="display:flex;align-items:center;gap:8px">'
-        f'<span style="display:inline-flex;gap:3px">{squares}</span>'
-        f'<span style="{LBL};color:{INK}">{_esc(difficulty)}</span></div>'
+        f'<span style="font-family:{MONO};font-size:9.5px;letter-spacing:.11em;'
+        f"text-transform:uppercase;display:inline-flex;align-items:center;gap:5px;"
+        f'color:var({var})"><span style="display:inline-flex;gap:2px">{marks}</span>'
+        f"{_esc(difficulty)}</span>"
     )
 
 
-def header_html() -> str:
+def _knock(inner: str, background: str = "var(--blue)") -> str:
     return (
-        f'<div style="display:flex;align-items:flex-end;justify-content:space-between;'
-        f'padding:34px 0 20px;border-bottom:2px solid {INK};font-family:{SERIF}">'
-        f'<div style="display:flex;align-items:baseline;gap:14px">'
-        f'<h1 style="margin:0;font-size:34px;font-weight:600;letter-spacing:-0.02em;'
-        f'color:{INK}">Flashcards</h1>'
-        f'<span style="font-size:16px;color:{INK_3}">notes in, Anki cards out</span></div>'
-        f'<span style="font-family:{MONO};font-size:11px;color:{MUTE}">gemini-2.5-flash</span></div>'
+        f'<div style="background:{background};color:var(--knockfg);'
+        "border:1.5px solid var(--ink);padding:22px 26px;box-shadow:6px 6px 0 var(--ink);"
+        f'font-family:{SERIF}">{inner}</div>'
     )
 
 
-def hint_html(rpm: int) -> str:
-    return (
-        f'<p style="margin:12px 0 0;font-family:{SERIF};font-size:12.5px;line-height:1.5;'
-        f'color:{MUTE}">Free tier allows <span style="font-family:{MONO};color:{INK_3}">{rpm}</span> '
-        f"requests a minute. Higher values wait between calls.</p>"
-    )
-
-
-def render_estimate(chunks: int, tokens: int, rpm: int) -> str:
+def render_estimate(chunks: int, tokens: int, rpm: int, spent: int) -> str:
+    left = max(0, DAILY_CAP - spent)
     waiting = max(0, (chunks - rpm) * 12)
-    cells = "".join(
-        f'<div style="display:flex;flex-direction:column;gap:4px">'
-        f'<span style="font-size:38px;font-weight:600;line-height:1;letter-spacing:-0.02em;'
-        f'color:{INK}">{value}</span><span style="{LBL}">{label}</span></div>'
-        for value, label in (
-            (chunks, "chunk" if chunks == 1 else "chunks"),
-            (chunks, "request" if chunks == 1 else "requests"),
-            (tokens, "tokens approx"),
-        )
+    over = chunks > left
+    headline = (
+        f"{chunks} chunk{'' if chunks == 1 else 's'} &middot; {chunks} "
+        f"request{'' if chunks == 1 else 's'} &middot; ~{tokens:,} tokens"
     )
-    wait_line = f" About {waiting}s of that is waiting on the rate limit." if waiting else ""
+    verdict = (
+        f"That is {chunks} of the {left} you have left today. About {chunks * 5} cards."
+        if not over
+        else f"That is more than the {left} you have left today. Lower Max chunks to "
+        f"{left} or come back after the reset."
+    )
+    wait_line = (
+        f" About {waiting}s of the run is waiting on the {rpm}-a-minute limit."
+        if waiting
+        else ""
+    )
+    body = (
+        f'<span style="{LBL};color:rgba(251,249,242,.72)">Estimate &mdash; nothing spent</span>'
+        f'<h2 style="font-family:{DISP};font-size:30px;margin:10px 0 6px;line-height:1.05;'
+        f'color:var(--knockfg)">{headline}</h2>'
+        f'<p style="margin:0;font-size:15px;line-height:1.5;color:var(--knockfg);opacity:.92">'
+        f"{verdict}</p>"
+    )
     return (
-        f'<div style="font-family:{SERIF}">'
-        f'<div style="border:1px solid {RULE};background:{CARD_BG};border-radius:2px;overflow:hidden">'
-        f'<div style="padding:16px 20px 0"><span style="{LBL}">Estimate</span></div>'
-        f'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;'
-        f'padding:14px 20px 20px">{cells}</div>'
-        f'<div style="display:flex;align-items:center;gap:10px;padding:14px 20px;'
-        f'background:{ACCENT_TINT};border-top:1px solid {ACCENT_EDGE}">'
-        f'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{ACCENT}" '
-        f'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
-        f'<path d="M20 6L9 17l-5-5"></path></svg>'
-        f'<span style="font-size:14px;color:{ACCENT}">No API calls were made.</span></div></div>'
-        f'<p style="margin:12px 2px 0;font-size:13px;line-height:1.55;color:{MUTE}">'
-        f"Token count is estimated locally at four characters per token, not measured "
-        f"by the API.{wait_line}</p></div>"
+        _knock(body, "var(--oranget)" if over else "var(--blue)")
+        + f'<p style="margin:14px 2px 0;font-family:{SERIF};font-size:13px;line-height:1.6;'
+        f'color:var(--mute)">Tokens are estimated locally at four characters per token, '
+        f"not measured by the API.{wait_line}</p>"
     )
 
 
 def render_error(title: str, code: str, detail: str, steps: tuple[str, ...] = ()) -> str:
     code_html = (
-        f'<span style="font-family:{MONO};font-size:11px;color:{MUTE}">{_esc(code)}</span>'
+        f'<span style="font-family:{MONO};font-size:11px;color:var(--mute)">{_esc(code)}</span>'
         if code
         else ""
     )
     rows = ""
     if steps:
         items = "".join(
-            f'<div style="display:flex;align-items:center;gap:14px;min-height:52px;'
-            f'padding:10px 4px;border-bottom:1px solid {RULE_2}">'
-            f'<span style="font-family:{MONO};font-size:14px;color:{ACCENT};width:16px">{index}</span>'
-            f'<span style="font-size:14.5px;color:{INK_2}">{step}</span></div>'
+            '<div style="display:flex;align-items:baseline;gap:14px;padding:10px 0;'
+            'border-bottom:1px solid var(--rule2)">'
+            f'<span style="font-family:{MONO};font-size:13px;color:var(--blue);width:14px">'
+            f"{index}</span>"
+            f'<span style="font-size:14.5px;color:var(--ink2);line-height:1.5">{step}</span></div>'
             for index, step in enumerate(steps, 1)
         )
         rows = (
-            f'<div style="padding-top:20px"><span style="{LBL}">What you can do</span>'
+            f'<div style="padding-top:18px"><span style="{LBL}">What you can do</span>'
             f'<div style="padding-top:6px">{items}</div></div>'
         )
     return (
         f'<div style="font-family:{SERIF}">'
-        f'<div style="border:1px solid {RULE};border-left:3px solid {ACCENT};background:#fbf0ed;'
-        f'border-radius:2px;padding:16px 20px;display:flex;flex-direction:column;gap:7px">'
-        f'<div style="display:flex;align-items:baseline;gap:10px">'
-        f'<span style="font-size:18px;font-weight:600;color:{INK}">{_esc(title)}</span>{code_html}</div>'
-        f'<p style="margin:0;font-size:14.5px;line-height:1.6;color:{INK_2}">{detail}</p>'
+        '<div style="border:1.5px solid var(--ink);border-left:5px solid var(--hard);'
+        "background:var(--paper2);padding:18px 22px;box-shadow:4px 4px 0 var(--shadow);"
+        'display:flex;flex-direction:column;gap:7px">'
+        '<div style="display:flex;align-items:baseline;gap:10px">'
+        f'<span style="font-size:19px;font-weight:600;color:var(--ink)">{_esc(title)}</span>'
+        f"{code_html}</div>"
+        f'<p style="margin:0;font-size:14.5px;line-height:1.6;color:var(--ink2)">{detail}</p>'
         f"</div>{rows}</div>"
     )
 
 
-_TICK = (
-    f'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{INK}" '
-    'stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
-    '<path d="M20 6L9 17l-5-5"></path></svg>'
-)
-_RING = (
-    f'<span style="width:14px;height:14px;border:2px solid {ACCENT};'
-    f'border-right-color:{RULE};border-radius:50%;display:inline-block"></span>'
-)
-_DOT = (
-    f'<span style="width:12px;height:12px;border:1px solid {RULE};'
-    'border-radius:50%;display:inline-block"></span>'
-)
+def render_quota_spent(spent: int, kept: int) -> str:
+    """The daily cap is a weekly event on this tier, not an exception.
+
+    So it gets a designed state that says what still works rather than a red
+    box that reads as a fault.
+    """
+    body = (
+        f'<span style="{LBL};color:rgba(251,249,242,.7)">Daily ration spent</span>'
+        f'<h2 style="font-family:{DISP};font-size:40px;margin:10px 0 8px;line-height:1;'
+        f'color:var(--knockfg)">That is today&rsquo;s twenty.</h2>'
+        f'<p style="margin:0;font-size:16px;line-height:1.55;color:var(--knockfg);opacity:.92">'
+        f"The free tier resets in {resets_in()}. Nothing is lost &mdash; "
+        f"{'the ' + str(kept) + ' cards already generated are still below' if kept else 'your notes are still here'}."
+        "</p>"
+    )
+    return (
+        _knock(body, "var(--ink)")
+        + '<div style="display:flex;gap:16px;margin-top:20px;flex-wrap:wrap">'
+        '<div style="flex:1 1 240px;border:1.5px solid var(--ink);background:var(--paper2);'
+        'padding:16px 20px">'
+        f'<span style="{LBL}">Still free</span>'
+        f'<p style="margin:8px 0 0;font-family:{SERIF};font-size:15px;line-height:1.5;'
+        'color:var(--ink2)">Preview keeps working. It never calls the API, so you can size '
+        "tomorrow&rsquo;s run now.</p></div>"
+        '<div style="flex:1 1 240px;border:1.5px solid var(--ink);background:var(--paper2);'
+        'padding:16px 20px">'
+        f'<span style="{LBL}">Still yours</span>'
+        f'<p style="margin:8px 0 0;font-family:{SERIF};font-size:15px;line-height:1.5;'
+        f'color:var(--ink2)">Everything generated today is still on the page and still '
+        "exportable.</p></div></div>"
+    )
 
 
-def render_stages(stages: list[tuple[str, str, str, str]], done: int, total: int) -> str:
-    rows = []
-    for index, (state, label, sublabel, meta) in enumerate(stages):
-        icon = {"done": _TICK, "active": _RING}.get(state, _DOT)
-        colour = {"done": INK_2, "active": INK}.get(state, FAINT)
-        weight = "500" if state == "active" else "400"
-        background = CARD_BG if state == "active" else "transparent"
-        top = f"border-top:1px solid {RULE_2};" if index == 0 else ""
-        sub = (
-            f'<span style="font-size:12.5px;color:{INK_3}">{_esc(sublabel)}</span>'
-            if sublabel and state == "active"
+def render_progress(
+    rows: list[list[str]], extra: list[list[str]], waiting: str = ""
+) -> str:
+    """A per-chunk ledger rather than a spinner.
+
+    At five requests a minute a run visibly stalls between calls. Naming the
+    pause is the whole fix: dead air only reads as broken when nothing on the
+    page accounts for it.
+    """
+    out = []
+    for name, state, meta in rows + extra:
+        colour, mark = {
+            "done": ("var(--easy)", "&#9632; done"),
+            "active": ("var(--blue)", "&#9632; calling&hellip;"),
+            "skipped": ("var(--mute)", "&#9633; skipped"),
+        }.get(state, ("var(--mute)", "&#9633; queued"))
+        dim = "opacity:.55;" if state == "queued" else ""
+        meta_html = (
+            f'<span style="font-family:{MONO};font-size:11px;color:var(--mute);'
+            f'white-space:nowrap">{_esc(meta)}</span>'
+            if meta
             else ""
         )
-        rows.append(
-            f'<div style="display:flex;align-items:center;gap:14px;min-height:54px;'
-            f'padding:10px 18px;background:{background};'
-            f'border-bottom:1px solid {RULE_2};{top}">'
-            f'<span style="width:16px;display:flex;justify-content:center">{icon}</span>'
-            f'<div style="display:flex;flex-direction:column;gap:2px;flex-grow:1">'
-            f'<span style="font-size:15px;font-weight:{weight};color:{colour}">{_esc(label)}</span>'
-            f"{sub}</div>"
-            f'<span style="font-family:{MONO};font-size:11.5px;color:{MUTE}">{_esc(meta)}</span></div>'
+        out.append(
+            '<div style="display:flex;justify-content:space-between;align-items:center;'
+            f'gap:16px;padding:12px 0;border-bottom:1px solid var(--rule2);{dim}">'
+            f'<span style="font-size:15px;flex:1;min-width:0;color:var(--ink)">'
+            f"{_esc(name)}</span>"
+            f'<span style="font-family:{MONO};font-size:11px;color:{colour};'
+            f'white-space:nowrap">{mark}</span>{meta_html}</div>'
         )
-    pct = int(100 * done / total) if total else 0
+    wait_block = ""
+    if waiting:
+        wait_block = (
+            '<div style="margin-top:20px;border:1.5px solid var(--oranget);'
+            "background:var(--warmbg);padding:15px 19px;display:flex;gap:14px;"
+            'align-items:flex-start">'
+            f'<span style="font-family:{MONO};font-size:20px;color:var(--oranget);'
+            'line-height:1">&#8987;</span><div>'
+            f'<p style="margin:0 0 4px;font-size:15px;font-weight:500;color:var(--ink)">'
+            f"{_esc(waiting)}</p>"
+            f'<p style="margin:0;font-size:13.5px;line-height:1.55;color:var(--ink2)">'
+            "This pause is the rate limiter, not a stall. The next chunk starts on its "
+            "own.</p></div></div>"
+        )
     return (
         f'<div style="font-family:{SERIF}">'
-        f'<div style="display:flex;align-items:baseline;justify-content:space-between;'
-        f'padding-bottom:12px"><span style="{LBL}">Progress</span>'
-        f'<span style="font-family:{MONO};font-size:11.5px;color:{INK_3}">'
-        f"step {done} of {total}</span></div>"
-        f'<div style="height:3px;background:{RULE};display:flex">'
-        f'<div style="width:{pct}%;background:{ACCENT}"></div></div>'
-        f'<div style="padding-top:18px">{"".join(rows)}</div></div>'
+        f'<span style="{LBL};display:block;margin-bottom:10px">Progress</span>'
+        f'{"".join(out)}{wait_block}</div>'
     )
 
 
 def render_summary(
     cards: int, chunks: int, dropped: int, duplicates: int, requests: int, cached: int
 ) -> str:
-    return (
-        f'<div style="font-family:{SERIF}">'
-        f'<div style="padding-bottom:18px;border-bottom:1px solid {RULE}">'
-        f'<p style="margin:0;font-size:26px;line-height:1.1;color:{INK}">'
-        # colour repeated on the span: without it Gradio's dark-theme text
-        # colour wins over the inherited value and it renders near-white.
-        f'<span style="font-weight:600;color:{INK}">{cards} cards</span> '
-        f'<span style="color:{INK_3}">from {chunks} '
-        f'{"chunk" if chunks == 1 else "chunks"}</span></p></div>'
-        f'<p style="margin:10px 0 0;font-family:{MONO};font-size:11px;color:{MUTE}">'
-        f"dropped {dropped} &nbsp;·&nbsp; duplicates {duplicates} &nbsp;·&nbsp; "
-        f"requests {requests} &nbsp;·&nbsp; cached {cached}</p></div>"
-    )
-
-
-_FLIP_ICON = (
-    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-    '<path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 7.5 4"></path><path d="M20 3v4h-4"></path>'
-    '<path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-7.5-4"></path><path d="M4 21v-4h4"></path></svg>'
-)
-
-
-def _face_head(card, rule_colour: str, back: bool = False) -> str:
-    left = (
-        f'<span style="{LBL}">{_esc(card.topic)}</span>'
-        if back
-        else meter(card.difficulty)
-    )
-    right = (
-        f'<span style="{LBL};color:{rule_colour}">answer</span>'
-        if back
-        else f'<span style="{LBL}">{_esc(card.topic)}</span>'
+    stats = "".join(
+        # The colour is repeated on every span: without it Gradio's own theme
+        # text colour wins over the inherited value and this renders near-white.
+        f'<span style="font-family:{MONO};font-size:12px;color:var(--ink2)">'
+        f'<b style="font-size:19px;color:var(--ink);font-weight:600">{value}</b> {label}</span>'
+        for value, label in (
+            (cards, "cards"),
+            (chunks, "chunk" if chunks == 1 else "chunks"),
+            (duplicates, "duplicates"),
+            (requests, "requests"),
+        )
     )
     return (
-        f'<div style="display:flex;align-items:center;justify-content:space-between;'
-        f'gap:10px;flex-shrink:0">{left}{right}</div>'
+        f'<div style="font-family:{SERIF};display:flex;justify-content:space-between;'
+        "align-items:center;gap:20px;flex-wrap:wrap;border-bottom:1.5px solid var(--ink);"
+        'padding-bottom:12px">'
+        f'<div style="display:flex;gap:28px;flex-wrap:wrap">{stats}</div>'
+        f'<span style="font-family:{MONO};font-size:10px;letter-spacing:.12em;'
+        f'text-transform:uppercase;color:var(--mute)">dropped {dropped} &middot; '
+        f"cached {cached}</span></div>"
     )
 
 
@@ -605,53 +574,76 @@ def render_cards(entries: list[SourcedCard]) -> str:
     blocks = []
     for index, entry in enumerate(entries):
         card = entry.card
-        rule_colour = DIFFICULTY.get(card.difficulty, (MUTE, 0))[0]
-        edge = f"border-left:3px solid {rule_colour};"
-        # Stagger the entrance so a dozen cards arrive as a wave rather than a slab.
-        delay = f"animation-delay:{min(index, 11) * 45}ms"
+        # Stagger the entrance so a dozen cards arrive as a wave, not a slab.
+        delay = f"animation-delay:{min(index, 11) * 42}ms"
+        head = (
+            '<div style="display:flex;justify-content:space-between;align-items:center;'
+            "gap:10px;padding-bottom:8px;border-bottom:1px solid var(--rule2);"
+            'flex-shrink:0">'
+            f'<span style="{LBL}">{_esc(card.topic)}</span>{dtag(card.difficulty)}</div>'
+        )
         blocks.append(
             f'<label class="fc" style="{delay}"><input type="checkbox">'
-            f'<div class="fc-pop"><div class="fc-inner">'
-            f'<div class="fc-face" style="{edge}">'
-            f"{_face_head(card, rule_colour)}"
-            f'<p style="margin:0;font-size:18px;font-weight:500;line-height:1.36;color:{INK};'
-            f'text-wrap:pretty;flex-grow:1">{_esc(card.question)}</p>'
-            f'<div class="flip-hint" style="display:flex;align-items:center;gap:6px;'
-            f'color:{ACCENT};flex-shrink:0">'
-            f'{_FLIP_ICON}<span style="{LBL};color:inherit">flip for answer</span></div></div>'
-            f'<div class="fc-face fc-back" style="{edge}">'
-            f"{_face_head(card, rule_colour, back=True)}"
-            f'<p style="margin:0;font-size:15px;line-height:28px;color:{INK_2};'
-            f'text-wrap:pretty;flex-grow:1">{_esc(card.answer)}</p></div>'
-            f"</div></div></label>"
+            f'<div class="fc-inner">'
+            f'<div class="fc-face">{head}'
+            f'<p style="margin:0;font-size:16.5px;font-weight:500;line-height:1.45;'
+            f'color:var(--ink);text-wrap:pretty;flex-grow:1">{_esc(card.question)}</p>'
+            f'<span style="{LBL};color:var(--blue);flex-shrink:0">flip for answer</span></div>'
+            f'<div class="fc-face fc-back">{head}'
+            f'<p style="margin:0;font-size:14.5px;line-height:1.62;color:var(--ink2);'
+            f'text-wrap:pretty;flex-grow:1">{_esc(card.answer)}</p>'
+            f'<span style="{LBL};color:var(--blue);flex-shrink:0">flip back</span></div>'
+            "</div></label>"
         )
     return (
-        f'<div style="font-family:{SERIF};padding-top:22px;display:grid;'
-        f"grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px;"
-        f'align-items:stretch">{"".join(blocks)}</div>'
+        '<div style="padding-top:20px;display:grid;'
+        "grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;"
+        f'align-items:start">{"".join(blocks)}</div>'
     )
 
 
 def render_partial(failures: list[str]) -> str:
     lines = "".join(
-        f'<p style="margin:5px 0 0;font-family:{MONO};font-size:12px;line-height:1.5;'
-        f'color:{INK_3}">{_esc(failure)}</p>'
+        f'<p style="margin:5px 0 0;font-family:{MONO};font-size:12px;line-height:1.55;'
+        f'color:var(--ink2)">{_esc(failure)}</p>'
         for failure in failures
     )
     count = len(failures)
     return (
         f'<div style="font-family:{SERIF};padding-top:18px">'
-        f'<div style="border:1px solid {RULE};border-left:3px solid {OCHRE};background:#faf4e8;'
-        f'border-radius:2px;padding:16px 20px">'
-        f'<span style="font-size:16px;font-weight:600;color:{INK}">'
-        f'{count} chunk{"" if count == 1 else "s"} failed</span>{lines}</div></div>'
+        '<div style="border:1.5px solid var(--ink);border-left:5px solid var(--hard);'
+        'background:var(--paper2);padding:15px 19px">'
+        f'<span style="font-size:16px;font-weight:600;color:var(--ink)">'
+        f'{count} chunk{"" if count == 1 else "s"} produced nothing</span>{lines}</div></div>'
     )
 
 
 EMPTY_RESULTS = (
-    f'<div style="font-family:{SERIF};border:1px dashed {RULE};border-radius:2px;'
-    f'padding:150px 24px;text-align:center">'
-    f'<p style="margin:0;font-size:15px;color:{MUTE}">Cards appear here once you generate.</p></div>'
+    f'<div style="font-family:{SERIF}">'
+    f'<span style="{LBL};display:block;margin-bottom:14px">What you will get</span>'
+    '<div style="border:1.5px dashed var(--rule);padding:30px 32px;background:var(--paper2)">'
+    '<div style="display:flex;gap:34px;align-items:flex-start;flex-wrap:wrap">'
+    '<div style="flex:0 0 260px;border:1.5px solid var(--rule);padding:15px 16px;'
+    'background:var(--paper)">'
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;'
+    'padding-bottom:8px;border-bottom:1px solid var(--rule2)">'
+    f'<span style="{LBL}">Topic</span>'
+    f'<span style="font-family:{MONO};font-size:9.5px;letter-spacing:.11em;'
+    'text-transform:uppercase;color:var(--mute)">difficulty</span></div>'
+    '<p style="margin:11px 0 0;font-size:16.5px;line-height:1.45;color:var(--mute)">'
+    "The question, answerable on its own without the notes beside it.</p>"
+    f'<p style="margin:11px 0 0;{LBL};color:var(--rule)">flip for answer</p></div>'
+    '<div style="flex:1 1 300px">'
+    '<p style="margin:0 0 14px;font-size:18px;line-height:1.5;color:var(--ink)">'
+    "Every card carries a question, an answer on the back, the topic it came from, "
+    "and a difficulty. Flip them here, or export the set and import it into Anki.</p>"
+    '<ol style="margin:0;padding-left:18px;font-size:14.5px;line-height:1.9;'
+    'color:var(--ink2)">'
+    "<li>Paste notes, or upload a .md / .txt file.</li>"
+    "<li>Press <b style=\"color:var(--ink)\">Preview</b> to see what it will cost. "
+    "It calls nothing.</li>"
+    "<li>Press <b style=\"color:var(--ink)\">Generate</b> when the estimate looks right.</li>"
+    "</ol></div></div></div></div>"
 )
 
 
@@ -699,70 +691,72 @@ def write_csv(entries: list[SourcedCard]) -> str:
 
 
 NO_INPUT = (
-    f'<div style="font-family:{SERIF};border:1px dashed {RULE};border-radius:2px;'
-    f'padding:44px 24px;text-align:center">'
-    f'<p style="margin:0;font-size:16px;color:{INK_2}">Nothing to work with</p>'
-    f'<p style="margin:7px 0 0;font-size:13.5px;color:{MUTE}">Paste notes on the left '
-    f"or upload a .md or .txt file, then try again.</p></div>"
+    f'<div style="font-family:{SERIF};border:1.5px solid var(--ink);'
+    'border-left:5px solid var(--mute);background:var(--paper2);padding:18px 22px">'
+    '<p style="margin:0;font-size:17px;font-weight:600;color:var(--ink)">Nothing to do</p>'
+    '<p style="margin:7px 0 0;font-size:14.5px;line-height:1.6;color:var(--ink2)">'
+    "Paste notes on the left or upload a .md or .txt file. Preview will tell you what "
+    "it costs before anything is spent.</p></div>"
 )
 
 _NO_KEY_STEPS = (
-    "Add GEMINI_API_KEY to .env at the project root",
-    "Reload the page once it is set",
+    "Put your key in a file called .env beside the app",
+    "Restart the app once it is set",
+    "The file is gitignored, so the key stays on this machine",
 )
 
-_QUOTA_STEPS = (
-    "Wait a minute, then try again",
-    "Lower Max chunks and split the work",
-    "Run again tomorrow if the daily cap is hit",
+_RATE_STEPS = (
+    "Wait a minute, then press Generate again",
+    "Lower Max chunks so fewer calls go out at once",
 )
+
+
+DEFAULT_MAX_CHUNKS = 5
+
+
+def chunk_limit(value: object) -> int:
+    """Coerce the Max chunks field into a usable positive limit.
+
+    Gradio hands back None when the number box is cleared and a string when it
+    holds something unparsable, and int() raised on both -- surfacing in the UI
+    as a bare "Error" with nothing to act on. Zero or a negative would also
+    slice the chunk list from the wrong end, silently dropping work.
+    """
+    try:
+        limit = int(float(value))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_CHUNKS
+    return max(1, limit)
+
+
+def chunk_label(chunk: Chunk) -> str:
+    return chunk.heading or chunk.source_path.stem
 
 
 # --- gradio handlers -------------------------------------------------------
 
 
-def preview(notes_text: str, files: list[str] | None, max_chunks: float) -> str:
+def preview(notes_text: str, files: list[str] | None, max_chunks: float):
+    """Costs nothing, so it is the move the design invites first."""
+    generate_label = gr.update()
     try:
         settings = load_settings()
     except ConfigError as exc:
-        return render_error("No API key", "", _esc(str(exc)), _NO_KEY_STEPS)
+        return render_error("No API key", "", _esc(str(exc)), _NO_KEY_STEPS), generate_label
 
-    chunks = gather_chunks(notes_text, files, settings)[: int(max_chunks)]
+    chunks = gather_chunks(notes_text, files, settings)[: chunk_limit(max_chunks)]
     if not chunks:
-        return NO_INPUT
+        return NO_INPUT, generate_label
 
+    spent = read_spent(settings)
     tokens = sum(estimate_tokens(chunk.text) for chunk in chunks)
-    return render_estimate(len(chunks), tokens, settings.requests_per_minute)
-
-
-def active_step(stages: list[list[str]]) -> int:
-    """1-based position of the running stage.
-
-    Derived rather than tracked by hand: a separate counter drifted out of step
-    with the stage list and reported "step 1 of 4" while stage 2 was running.
-    """
-    for index, stage in enumerate(stages):
-        if stage[0] == "active":
-            return index + 1
-    return len(stages)
-
-
-def _stages(use_dedupe: bool) -> list[list[str]]:
-    stages = [
-        ["pending", "Splitting notes into chunks", "", ""],
-        ["pending", "Generating cards", "", ""],
-    ]
-    if use_dedupe:
-        stages.append(
-            [
-                "pending",
-                "Removing near-duplicates",
-                "First run loads a model, about 25 seconds",
-                "",
-            ]
-        )
-    stages.append(["pending", "Writing CSV", "", ""])
-    return stages
+    left = max(0, DAILY_CAP - spent)
+    return (
+        render_estimate(len(chunks), tokens, settings.requests_per_minute, spent),
+        # The cost rides on the button itself, so pressing Generate is a
+        # considered act rather than a reflex.
+        gr.update(value=f"Generate · spends {len(chunks)} of your {left}"),
+    )
 
 
 def generate(
@@ -773,43 +767,63 @@ def generate(
     try:
         settings = load_settings()
     except ConfigError as exc:
-        yield render_error("No API key", "", _esc(str(exc)), _NO_KEY_STEPS), "", hide
+        yield (
+            header_html(0),
+            render_error("No API key", "", _esc(str(exc)), _NO_KEY_STEPS),
+            "",
+            hide,
+        )
         return
 
-    chunks = gather_chunks(notes_text, files, settings)[: int(max_chunks)]
+    spent = read_spent(settings)
+    chunks = gather_chunks(notes_text, files, settings)[: chunk_limit(max_chunks)]
     if not chunks:
-        yield NO_INPUT, "", hide
+        yield header_html(spent), NO_INPUT, "", hide
         return
 
-    stages = _stages(use_dedupe)
-    total = len(stages)
+    rpm = settings.requests_per_minute
+    rows = [[chunk_label(chunk), "queued", ""] for chunk in chunks]
+    extra: list[list[str]] = []
+    if use_dedupe:
+        extra.append(["Remove near-duplicates", "queued", ""])
+    extra.append(["Write CSV", "queued", ""])
+
     client = GeminiClient(settings)
     outcome = Outcome(chunks=len(chunks))
 
-    stages[0][0] = "done"
-    stages[0][3] = f"{len(chunks)} chunk{'' if len(chunks) == 1 else 's'}"
-    stages[1][0] = "active"
-    stages[1][3] = f"0 / {len(chunks)}"
-    yield render_stages(stages, active_step(stages), total), "", hide
+    for index, chunk in enumerate(chunks):
+        rows[index][1] = "active"
+        waiting = (
+            f"Waiting for the {rpm}-a-minute limit." if index and index % rpm == 0 else ""
+        )
+        yield (
+            header_html(spent + client.request_count),
+            render_progress(rows, extra, waiting),
+            render_cards(outcome.entries),
+            hide,
+        )
 
-    for index, chunk in enumerate(chunks, start=1):
         try:
             result = pipeline.run([chunk], settings, client)
         except errors.APIError as exc:
-            detail = (
-                f"The free tier allows {settings.requests_per_minute} requests a "
-                f"minute. {_esc(str(exc.message))} Your notes are still here."
-            )
-            steps = _QUOTA_STEPS if exc.code == 429 else ()
-            yield (
-                render_error(
-                    "Out of quota" if exc.code == 429 else "API error",
+            spent = add_spent(settings, client.request_count)
+            if is_daily_cap(exc):
+                status = render_quota_spent(spent, len(outcome.entries))
+            else:
+                detail = (
+                    f"{_esc(str(exc.message))} Your notes and any cards already "
+                    "generated are still here."
+                )
+                status = render_error(
+                    "Rate limited" if exc.code == 429 else "API error",
                     f"HTTP {exc.code}",
                     detail,
-                    steps,
+                    _RATE_STEPS if exc.code == 429 else (),
                 )
-                + render_cards(outcome.entries),
-                "",
+            yield (
+                header_html(spent),
+                status,
+                render_cards(outcome.entries),
                 hide,
             )
             return
@@ -817,19 +831,20 @@ def generate(
         outcome.entries.extend(result.cards)
         outcome.dropped += result.dropped
         outcome.failures.extend(result.failures)
-        stages[1][3] = f"{index} / {len(chunks)}"
+        rows[index][1] = "done"
+        rows[index][2] = f"{len(result.cards)} cards"
         yield (
-            render_stages(stages, active_step(stages), total),
+            header_html(spent + client.request_count),
+            render_progress(rows, extra),
             render_cards(outcome.entries),
             hide,
         )
 
-    stages[1][0] = "done"
-
     if use_dedupe:
-        stages[2][0] = "active"
+        extra[0][1] = "active"
         yield (
-            render_stages(stages, active_step(stages), total),
+            header_html(spent + client.request_count),
+            render_progress(rows, extra),
             render_cards(outcome.entries),
             hide,
         )
@@ -838,16 +853,17 @@ def generate(
                 outcome.entries, settings.similarity_threshold, settings.embedding_model
             )
             outcome.entries, outcome.duplicates = kept, len(dropped)
-            stages[2][3] = f"-{len(dropped)}"
+            extra[0][1], extra[0][2] = "done", f"-{len(dropped)}"
         except dedupe.DedupeUnavailable as exc:
             outcome.dedupe_note = str(exc)
-            stages[2][3] = "skipped"
-        stages[2][0] = "done"
+            extra[0][1] = "skipped"
 
-    stages[-1][0] = "done"
+    extra[-1][1] = "done"
     outcome.csv_path = write_csv(outcome.entries)
     outcome.requests = client.request_count
     outcome.cache_hits = client.cache_hits
+    # Cached replies cost no quota, so only real calls move the ration.
+    spent = add_spent(settings, max(0, outcome.requests - outcome.cache_hits))
 
     summary = render_summary(
         len(outcome.entries),
@@ -862,10 +878,11 @@ def generate(
     if outcome.dedupe_note:
         summary += (
             f'<p style="margin:10px 0 0;font-family:{SERIF};font-size:12.5px;'
-            f'color:{MUTE}">Dedupe skipped: {_esc(outcome.dedupe_note)}</p>'
+            f'color:var(--mute)">Dedupe skipped: {_esc(outcome.dedupe_note)}</p>'
         )
 
     yield (
+        header_html(spent),
         summary,
         render_cards(outcome.entries),
         gr.update(value=outcome.csv_path, visible=True),
@@ -875,14 +892,21 @@ def generate(
 # --- ui --------------------------------------------------------------------
 
 GROUND = (
-    '<div id="ground"><div class="rules"></div>'
-    '<div class="bloom b1"></div><div class="bloom b2"></div>'
-    '<div class="bloom b3"></div><div class="grain"></div></div>'
+    '<div id="ground"><div class="bloom b1"></div><div class="bloom b2"></div>'
+    '<div class="grain"></div></div>'
 )
+
+
+def initial_spent() -> int:
+    try:
+        return read_spent(load_settings())
+    except ConfigError:
+        return 0
+
 
 with gr.Blocks(title="Flashcards") as demo:
     gr.HTML(GROUND, elem_id="groundwrap")
-    gr.HTML(header_html())
+    header = gr.HTML(header_html(initial_spent()))
 
     with gr.Row(elem_id="main"):
         with gr.Column(elem_id="left"):
@@ -903,7 +927,7 @@ with gr.Blocks(title="Flashcards") as demo:
             with gr.Column(elem_id="controls"):
                 max_chunks = gr.Number(
                     label="Max chunks",
-                    value=5,
+                    value=DEFAULT_MAX_CHUNKS,
                     minimum=1,
                     precision=0,
                     elem_id="maxchunks",
@@ -914,9 +938,7 @@ with gr.Blocks(title="Flashcards") as demo:
                     elem_id="dedupe",
                 )
 
-            gr.HTML(hint_html(5))
-
-            preview_button = gr.Button("Preview · free", elem_id="previewbtn")
+            preview_button = gr.Button("Preview — free", elem_id="previewbtn")
             generate_button = gr.Button("Generate", elem_id="genbtn")
 
         with gr.Column(elem_id="right"):
@@ -927,12 +949,14 @@ with gr.Blocks(title="Flashcards") as demo:
             cards = gr.HTML()
 
     preview_button.click(
-        preview, inputs=[notes_input, file_input, max_chunks], outputs=status
+        preview,
+        inputs=[notes_input, file_input, max_chunks],
+        outputs=[status, generate_button],
     )
     generate_button.click(
         generate,
         inputs=[notes_input, file_input, max_chunks, use_dedupe],
-        outputs=[status, cards, download],
+        outputs=[header, status, cards, download],
     )
 
 

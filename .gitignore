@@ -9,3 +9,4 @@ cards.csv
 benchmark-results.jsonl
 .claude/
 *.log
+design*/flashcards-*.html

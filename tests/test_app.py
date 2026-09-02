@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -39,7 +40,7 @@ class FakeClient:
         return list(self._cards)
 
 
-def last(generator) -> tuple[str, str, Any]:
+def last(generator) -> tuple[str, str, str, Any]:
     """Drain a Gradio generator handler and keep only its final yield."""
     return deque(generator, maxlen=1)[0]
 
@@ -48,6 +49,28 @@ def last(generator) -> tuple[str, str, Any]:
 def _wire_app(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
     monkeypatch.setattr(app, "load_settings", lambda: settings)
     monkeypatch.setattr(app, "GeminiClient", lambda _: FakeClient())
+
+
+def _quota_error(quota_id: str) -> errors.APIError:
+    return errors.APIError(
+        429,
+        {
+            "error": {
+                "code": 429,
+                "message": "You exceeded your current quota",
+                "status": "RESOURCE_EXHAUSTED",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                        "violations": [{"quotaId": quota_id, "quotaValue": "20"}],
+                    }
+                ],
+            }
+        },
+    )
+
+
+DAILY = "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
 
 
 # --- input gathering -------------------------------------------------------
@@ -60,40 +83,100 @@ def test_pasted_text_becomes_chunks(settings: Settings) -> None:
     assert chunks[0].source_path.stem == "pasted"
 
 
-def test_uploaded_files_are_read(tmp_path: Path, settings: Settings) -> None:
-    note = tmp_path / "embeddings.md"
-    note.write_text("# Embeddings\n\nVectors for words.", encoding="utf-8")
+def test_uploaded_file_becomes_chunks(settings: Settings, tmp_path: Path) -> None:
+    note = tmp_path / "lecture.md"
+    note.write_text(NOTES, encoding="utf-8")
     chunks = app.gather_chunks("", [str(note)], settings)
-    # The filename becomes the source tag, so cards stay traceable in Anki.
-    assert chunks[0].source_path.stem == "embeddings"
+    assert chunks and chunks[0].source_path.stem == "lecture"
 
 
-def test_text_and_files_combine(tmp_path: Path, settings: Settings) -> None:
-    note = tmp_path / "extra.md"
-    note.write_text("# Extra\n\nMore body text.", encoding="utf-8")
-    chunks = app.gather_chunks(NOTES, [str(note)], settings)
-    assert {c.source_path.stem for c in chunks} == {"pasted", "extra"}
+def test_paste_and_upload_combine(settings: Settings, tmp_path: Path) -> None:
+    note = tmp_path / "lecture.md"
+    note.write_text("# Other\n\nSomething else entirely here.", encoding="utf-8")
+    assert len(app.gather_chunks(NOTES, [str(note)], settings)) == 2
 
 
-def test_blank_input_yields_nothing(settings: Settings) -> None:
+def test_blank_paste_is_ignored(settings: Settings) -> None:
     assert app.gather_chunks("   ", None, settings) == []
+
+
+# --- the daily ration ------------------------------------------------------
+
+
+def test_ration_starts_empty(settings: Settings) -> None:
+    assert app.read_spent(settings) == 0
+
+
+def test_ration_accumulates_within_a_day(settings: Settings) -> None:
+    app.add_spent(settings, 3)
+    assert app.add_spent(settings, 2) == 5
+    assert app.read_spent(settings) == 5
+
+
+def test_ration_is_keyed_by_pacific_day(settings: Settings) -> None:
+    """Google's cap rolls over at midnight US Pacific, not local midnight.
+
+    Keying on the local date would reset the strip hours early or late and make
+    it lie about what is left.
+    """
+    app.add_spent(settings, 4)
+    stored = json.loads(app._usage_file(settings).read_text(encoding="utf-8"))
+    assert list(stored) == [app.quota_day()]
+
+
+def test_a_corrupt_counter_reads_as_zero(settings: Settings) -> None:
+    # The ration is an aid; refusing to render the page over an unparsable
+    # counter would be worse than briefly under-reporting.
+    app._usage_file(settings).parent.mkdir(parents=True, exist_ok=True)
+    app._usage_file(settings).write_text("{not json", encoding="utf-8")
+    assert app.read_spent(settings) == 0
+
+
+def test_ration_strip_marks_what_is_spent() -> None:
+    assert app.ticks_html(0).count("background:") == 0
+    assert app.ticks_html(7).count("background:") == 7
+    assert app.ticks_html(app.DAILY_CAP).count("background:") == app.DAILY_CAP
+
+
+def test_header_counts_down_what_is_left() -> None:
+    assert ">13</b> of 20 left" in app.header_html(7)
+    assert "none left" in app.header_html(app.DAILY_CAP)
+
+
+def test_cached_replies_do_not_move_the_ration(
+    monkeypatch: pytest.MonkeyPatch, settings: Settings
+) -> None:
+    """A cache hit consumes no quota, so it must not fill a tick."""
+
+    class Cached(FakeClient):
+        def generate_cards(self, prompt: str) -> list[Flashcard]:
+            self.request_count += 1
+            self.cache_hits += 1
+            return [_card()]
+
+    monkeypatch.setattr(app, "GeminiClient", lambda _: Cached())
+    last(app.generate(NOTES, None, 5, False))
+    assert app.read_spent(settings) == 0
+
+
+def test_real_calls_do_move_the_ration(settings: Settings) -> None:
+    last(app.generate(NOTES, None, 5, False))
+    assert app.read_spent(settings) == 1
 
 
 # --- rendering -------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
-    ("difficulty", "filled"),
-    [("easy", 1), ("medium", 2), ("hard", 3)],
+    ("difficulty", "filled"), [("easy", 1), ("medium", 2), ("hard", 3)]
 )
-def test_meter_fills_one_bar_per_level(difficulty: str, filled: int) -> None:
-    # The filled-square count carries the level, so it survives greyscale and
-    # colour blindness. The card's margin rule is what carries the colour.
-    assert app.meter(difficulty).count(f"background:{app.INK}") == filled
+def test_difficulty_fills_one_mark_per_level(difficulty: str, filled: int) -> None:
+    # The count carries the level, so it survives greyscale and colour blindness.
+    assert app.dtag(difficulty).count("background:var(") == filled
 
 
-def test_meter_labels_the_level() -> None:
-    assert ">hard<" in app.meter("hard")
+def test_difficulty_labels_the_level() -> None:
+    assert "hard</span>" in app.dtag("hard")
 
 
 def test_cards_escape_model_output() -> None:
@@ -108,32 +191,42 @@ def test_render_cards_is_empty_for_no_cards() -> None:
     assert app.render_cards([]) == ""
 
 
-def test_summary_matches_the_cli_wording() -> None:
+def test_summary_reports_the_run() -> None:
     summary = app.render_summary(3, 1, 0, 1, 0, 1)
-    assert "3 cards" in summary
-    assert "from 1 chunk<" in summary  # singular for one chunk
-    assert "dropped 0" in summary and "duplicates 1" in summary
+    assert "3</b> cards" in summary
+    assert "1</b> chunk<" in summary  # singular for one chunk
+    assert "dropped 0" in summary and "1</b> duplicates" in summary
 
 
-def test_card_margin_rule_carries_the_difficulty_colour() -> None:
-    # Colour lives on the card edge, not in the meter.
+def test_card_carries_the_difficulty_colour() -> None:
     entry = _sourced(_card(difficulty="hard"))
-    assert f"border-left:3px solid {app.DIFFICULTY['hard'][0]}" in app.render_cards([entry])
+    assert "var(--hard)" in app.render_cards([entry])
 
 
-def test_estimate_reports_counts_and_reassurance() -> None:
-    estimate = app.render_estimate(2, 480, 5)
-    assert ">2<" in estimate and ">480<" in estimate
-    assert "No API calls were made." in estimate
+def test_estimate_reports_counts_and_costs_nothing() -> None:
+    estimate = app.render_estimate(2, 480, 5, spent=0)
+    assert "2 chunks" in estimate and "480 tokens" in estimate
+    assert "nothing spent" in estimate
+
+
+def test_estimate_prices_the_run_against_what_is_left() -> None:
+    assert "That is 4 of the 13 you have left today." in app.render_estimate(
+        4, 900, 5, spent=7
+    )
+
+
+def test_estimate_warns_when_the_run_will_not_fit() -> None:
+    # Better to say so before the run than to fail halfway through it.
+    estimate = app.render_estimate(9, 2000, 5, spent=17)
+    assert "more than the 3 you have left" in estimate
 
 
 # --- preview ---------------------------------------------------------------
 
 
 def test_preview_reports_chunks_and_spends_nothing() -> None:
-    message = app.preview(NOTES, None, 5)
-    assert "Estimate" in message
-    assert "No API calls were made" in message
+    status, _ = app.preview(NOTES, None, 5)
+    assert "Estimate" in status and "nothing spent" in status
 
 
 def test_preview_never_builds_a_client(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -141,35 +234,60 @@ def test_preview_never_builds_a_client(monkeypatch: pytest.MonkeyPatch) -> None:
         raise AssertionError("preview must not touch the API")
 
     monkeypatch.setattr(app, "GeminiClient", explode)
-    assert "Estimate" in app.preview(NOTES, None, 5)
+    status, _ = app.preview(NOTES, None, 5)
+    assert "Estimate" in status
+
+
+def test_preview_prices_the_generate_button() -> None:
+    # The cost rides on the button itself so Generate is a considered act.
+    _, button = app.preview(NOTES, None, 5)
+    assert "spends 1 of your 20" in button["value"]
 
 
 def test_preview_on_empty_input_is_friendly() -> None:
-    assert "Nothing to work with" in app.preview("", None, 5)
+    status, _ = app.preview("", None, 5)
+    assert "Nothing to do" in status
 
 
 # --- generate --------------------------------------------------------------
 
 
 def test_generate_returns_cards_summary_and_csv() -> None:
-    status, cards_html, download = last(app.generate(NOTES, None, 5, False))
+    _, status, cards_html, download = last(app.generate(NOTES, None, 5, False))
 
     assert "What is tokenization?" in cards_html
-    assert "1 cards" in status and "from 1 chunk" in status
+    assert "1</b> cards" in status and "1</b> chunk" in status
     assert download["visible"] is True
     assert Path(download["value"]).exists()
 
 
 def test_generate_streams_progress_before_finishing() -> None:
     frames = list(app.generate(NOTES, None, 5, False))
-    # A dead spinner was the thing to avoid: the stage list must appear first.
+    # A dead spinner was the thing to avoid: the ledger must appear first.
     assert len(frames) > 1
-    assert "Progress" in frames[0][0]
-    assert "Splitting notes into chunks" in frames[0][0]
+    assert "Progress" in frames[0][1]
+    assert "Tokenization" in frames[0][1]
+
+
+def test_generate_refreshes_the_ration_as_it_runs() -> None:
+    frames = list(app.generate(NOTES, None, 5, False))
+    assert "Daily ration" in frames[0][0]
+
+
+def test_the_rate_limit_pause_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dead air only reads as broken when nothing on the page accounts for it.
+
+    At five a minute a longer run visibly stalls, so the wait is labelled
+    rather than hidden behind a spinner.
+    """
+    long_notes = "\n\n".join(f"# H{n}\n\nBody number {n} here." for n in range(7))
+    frames = [f[1] for f in app.generate(long_notes, None, 7, False)]
+    assert any("Waiting for the 5-a-minute limit" in f for f in frames)
+    assert any("This pause is the rate limiter, not a stall" in f for f in frames)
 
 
 def test_csv_is_importable() -> None:
-    _, _, download = last(app.generate(NOTES, None, 5, False))
+    _, _, _, download = last(app.generate(NOTES, None, 5, False))
     with Path(download["value"]).open(encoding="utf-8", newline="") as handle:
         rows = [row for row in csv.reader(handle) if not row[0].startswith("#")]
     assert rows[0][0] == "What is tokenization?"
@@ -199,7 +317,7 @@ def test_missing_dedupe_extra_is_reported_not_fatal(
         raise app.dedupe.DedupeUnavailable("sentence-transformers is not installed")
 
     monkeypatch.setattr(app.dedupe, "deduplicate", unavailable)
-    status, cards_html, download = last(app.generate(NOTES, None, 5, True))
+    _, status, cards_html, download = last(app.generate(NOTES, None, 5, True))
 
     assert "First?" in cards_html and "Second?" in cards_html
     assert "Dedupe skipped" in status
@@ -213,9 +331,9 @@ def test_duplicates_are_reported(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         app.dedupe, "deduplicate", lambda entries, *_, **__: ([entries[0]], [entries[1]])
     )
-    status, cards_html, _ = last(app.generate(NOTES, None, 5, True))
+    _, status, cards_html, _ = last(app.generate(NOTES, None, 5, True))
 
-    assert "duplicates 1" in status
+    assert "1</b> duplicates" in status
     assert "Second?" not in cards_html
 
 
@@ -226,23 +344,42 @@ def test_dedupe_short_circuits_on_a_single_card(
         raise AssertionError("dedupe should not run for a single card")
 
     monkeypatch.setattr(app.dedupe, "load_encoder", explode)
-    status, _, _ = last(app.generate(NOTES, None, 5, True))
+    _, status, _, _ = last(app.generate(NOTES, None, 5, True))
     assert "Dedupe skipped" not in status
 
 
-def test_quota_error_becomes_a_readable_message(
+def test_rate_limit_error_becomes_a_readable_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class Exhausted(FakeClient):
+    class Limited(FakeClient):
         def generate_cards(self, prompt: str) -> list[Flashcard]:
-            raise errors.ClientError(429, {"error": {"message": "quota"}})
+            raise _quota_error("GenerateRequestsPerMinutePerProjectPerModel-FreeTier")
 
-    monkeypatch.setattr(app, "GeminiClient", lambda _: Exhausted())
-    status, cards_html, download = last(app.generate(NOTES, None, 5, False))
+    monkeypatch.setattr(app, "GeminiClient", lambda _: Limited())
+    _, status, cards_html, download = last(app.generate(NOTES, None, 5, False))
 
-    assert "Out of quota" in status and "HTTP 429" in status
+    assert "Rate limited" in status and "HTTP 429" in status
     assert "Lower Max chunks" in status  # the recovery steps are shown
     assert cards_html == ""
+    assert download["visible"] is False
+
+
+def test_the_daily_cap_gets_its_own_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hitting the cap is a weekly event on this tier, not a fault.
+
+    So it says what still works instead of rendering as a red error box.
+    """
+
+    class Exhausted(FakeClient):
+        def generate_cards(self, prompt: str) -> list[Flashcard]:
+            raise _quota_error(DAILY)
+
+    monkeypatch.setattr(app, "GeminiClient", lambda _: Exhausted())
+    _, status, _, download = last(app.generate(NOTES, None, 5, False))
+
+    assert "That is today" in status and "twenty" in status
+    assert "Preview keeps working" in status
+    assert "Rate limited" not in status
     assert download["visible"] is False
 
 
@@ -251,7 +388,7 @@ def test_missing_secret_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
         raise ConfigError("GEMINI_API_KEY is not set")
 
     monkeypatch.setattr(app, "load_settings", unconfigured)
-    status, cards_html, download = last(app.generate(NOTES, None, 5, False))
+    _, status, cards_html, download = last(app.generate(NOTES, None, 5, False))
 
     assert "No API key" in status
     assert ".env" in status
@@ -260,31 +397,10 @@ def test_missing_secret_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_generate_on_empty_input_is_friendly() -> None:
-    status, cards_html, download = last(app.generate("", None, 5, False))
-    assert "Nothing to work with" in status
+    _, status, cards_html, download = last(app.generate("", None, 5, False))
+    assert "Nothing to do" in status
     assert cards_html == ""
     assert download["visible"] is False
-
-
-def test_step_counter_tracks_the_active_stage() -> None:
-    # A hand-maintained counter drifted and reported "step 1 of 4" while stage 2
-    # was running, so the number is derived from the stage list instead.
-    stages = [
-        ["done", "a", "", ""],
-        ["active", "b", "", ""],
-        ["pending", "c", "", ""],
-    ]
-    assert app.active_step(stages) == 2
-    stages[1][0], stages[2][0] = "done", "active"
-    assert app.active_step(stages) == 3
-    stages[2][0] = "done"
-    assert app.active_step(stages) == 3  # all done: report the last stage
-
-
-def test_generating_frame_reports_step_two_of_four() -> None:
-    frames = [f[0] for f in app.generate(NOTES, None, 5, True)]
-    generating = next(f for f in frames if "Generating cards" in f and "step" in f)
-    assert "step 2 of 4" in generating
 
 
 def test_summary_sets_colour_on_every_text_span() -> None:
@@ -293,6 +409,9 @@ def test_summary_sets_colour_on_every_text_span() -> None:
     summary = app.render_summary(12, 3, 0, 1, 0, 3)
     for span in summary.split("<span")[1:]:
         assert "color:" in span.split(">")[0]
+
+
+# --- the card --------------------------------------------------------------
 
 
 def test_card_has_both_faces() -> None:
@@ -318,17 +437,46 @@ def test_answer_lives_on_the_back_face() -> None:
     assert "Back side text." in back
 
 
+def test_cards_size_to_their_content() -> None:
+    """Faces stack in a grid cell, not absolutely.
+
+    A fixed height clipped long answers and left short ones swimming, so the
+    two faces share one grid area and the taller wins.
+    """
+    assert "grid-area:1/1" in app.CSS
+    assert "position:absolute" not in app.CSS.split(".fc-face")[1].split("}")[0]
+
+
 def test_entrance_is_staggered_then_capped() -> None:
     entries = [_sourced(_card(question=f"Q{n}")) for n in range(14)]
     rendered = app.render_cards(entries)
     assert "animation-delay:0ms" in rendered
-    assert "animation-delay:45ms" in rendered
+    assert "animation-delay:42ms" in rendered
     # Capped so the last card of a long run does not wait half a second.
-    assert "animation-delay:495ms" in rendered
-    assert "animation-delay:540ms" not in rendered
+    assert "animation-delay:462ms" in rendered
+    assert "animation-delay:504ms" not in rendered
+
+
+def test_entrance_animation_does_not_pin_the_hover_lift() -> None:
+    # animation-fill-mode: both keeps the final keyframe's `transform: none`
+    # applied forever, and an animated value outranks a normal one, so
+    # `.fc:hover { transform: translateY(-3px) }` never took effect.
+    assert "cubic-bezier(.2,.8,.2,1) backwards" in app.CSS
+    assert "cubic-bezier(.2,.8,.2,1) both" not in app.CSS
+    assert ".fc:hover .fc-inner{transform:translateY(-3px)}" in app.CSS
 
 
 # --- palette ---------------------------------------------------------------
+
+
+def _tokens(block: str) -> dict[str, str]:
+    pairs = (part.split(":", 1) for part in block.split(";") if part.strip())
+    return {name.strip(): value.strip() for name, value in pairs}
+
+
+LIGHT = _tokens(app.LIGHT_TOKENS)
+DARK = _tokens(app.DARK_TOKENS)
+PALETTES = [pytest.param(LIGHT, id="light"), pytest.param(DARK, id="dark")]
 
 
 def _luminance(colour: str) -> float:
@@ -352,79 +500,153 @@ def _hue(colour: str) -> float:
     return colorsys.rgb_to_hls(r, g, b)[0] * 360
 
 
-@pytest.mark.parametrize("level", ["easy", "medium", "hard"])
-def test_difficulty_colour_clears_wcag_aa(level: str) -> None:
-    # The label sits at 10.5px, so AA for normal text is the bar. Medium used to
-    # sit at 2.89 and was genuinely hard to read.
-    colour = app.DIFFICULTY[level][0]
-    assert _contrast(colour, app.CARD_BG) >= 4.5
+def test_dark_defines_every_token_light_does() -> None:
+    # A token defined in one mode only falls back silently to whatever the other
+    # mode left behind, which is how half-themed pages happen.
+    assert set(LIGHT) == set(DARK)
 
 
-def test_difficulty_levels_are_distinguishable_by_hue() -> None:
+@pytest.mark.parametrize("palette", PALETTES)
+@pytest.mark.parametrize("level", ["--easy", "--med", "--hard"])
+def test_difficulty_colour_clears_wcag_aa(palette: dict, level: str) -> None:
+    # The label sits at 9.5px, so AA for normal text is the bar. An earlier
+    # medium sat at 2.89 and was genuinely hard to read.
+    assert _contrast(palette[level], palette["--paper2"]) >= 4.5
+
+
+@pytest.mark.parametrize("palette", PALETTES)
+@pytest.mark.parametrize("token", ["--ink", "--ink2", "--mute", "--blue", "--oranget"])
+def test_text_colours_clear_wcag_aa(palette: dict, token: str) -> None:
+    assert _contrast(palette[token], palette["--paper2"]) >= 4.5
+
+
+@pytest.mark.parametrize("palette", PALETTES)
+def test_knockout_text_clears_aa_on_its_block(palette: dict) -> None:
+    # Paper-coloured text on the spot blue, which is its own contrast problem.
+    assert _contrast(palette["--knockfg"], palette["--blue"]) >= 4.5
+
+
+@pytest.mark.parametrize("palette", PALETTES)
+def test_difficulty_levels_are_distinguishable_by_hue(palette: dict) -> None:
     # easy and hard were once three degrees apart, which is the same colour to
-    # the eye. Squares carry the level, but the edge should not actively mislead.
-    hues = [_hue(app.DIFFICULTY[level][0]) for level in ("easy", "medium", "hard")]
+    # the eye. The marks carry the level, but colour should not actively mislead.
+    hues = [_hue(palette[level]) for level in ("--easy", "--med", "--hard")]
     assert abs(hues[0] - hues[1]) >= 20
     assert abs(hues[1] - hues[2]) >= 20
 
 
-def test_action_colour_is_not_a_difficulty_colour() -> None:
-    # Otherwise a card's edge reads as a button.
-    assert app.ACCENT not in {colour for colour, _ in app.DIFFICULTY.values()}
-    assert min(abs(_hue(app.ACCENT) - _hue(c)) for c, _ in app.DIFFICULTY.values()) >= 40
+@pytest.mark.parametrize("palette", PALETTES)
+def test_action_colour_is_not_a_difficulty_colour(palette: dict) -> None:
+    # Otherwise a card's difficulty mark reads as a button.
+    levels = [palette[level] for level in ("--easy", "--med", "--hard")]
+    assert palette["--blue"] not in levels
+    assert min(abs(_hue(palette["--blue"]) - _hue(c)) for c in levels) >= 40
 
 
-def test_estimate_confirmation_is_not_a_difficulty_colour() -> None:
-    # It was sage, the same colour as "easy", so the panel read as card metadata
-    # rather than the app confirming something.
-    estimate = app.render_estimate(3, 758, 5)
-    for colour, _ in app.DIFFICULTY.values():
-        assert colour not in estimate
-
-
-def test_flip_affordance_is_hoverable() -> None:
-    # The card lifted on hover but the affordance stayed inert.
-    assert 'class="flip-hint"' in app.render_cards([_sourced(_card())])
-    assert ".fc:hover .flip-hint" in app.CSS
-    assert "focus-visible ~ .fc-pop .flip-hint" in app.CSS
-
-
-def test_entrance_animation_does_not_pin_the_hover_lift() -> None:
-    # animation-fill-mode: both keeps the final keyframe's `transform: none`
-    # applied forever, and an animated value outranks a normal one, so
-    # `.fc:hover { transform: translateY(-3px) }` never took effect.
-    assert "cubic-bezier(.2,.8,.2,1) backwards" in app.CSS
-    assert "cubic-bezier(.2,.8,.2,1) both" not in app.CSS
-
-
-# --- drifting ledger -------------------------------------------------------
+# --- ground and motion -----------------------------------------------------
 
 
 def test_ground_layers_are_present_and_behind_the_page() -> None:
-    for layer in ("rules", "bloom b1", "bloom b2", "bloom b3", "grain"):
+    for layer in ("bloom b1", "bloom b2", "grain"):
         assert layer in app.GROUND
-    assert "#ground" in app.CSS and "z-index: 0" in app.CSS
+    assert "#ground" in app.CSS and "z-index:0" in app.CSS
     # A solid container background would paint straight over the fixed layer.
-    assert "background: transparent !important" in app.CSS
+    assert "background:transparent !important" in app.CSS
 
 
-def test_flip_pop_only_runs_while_checked() -> None:
-    # Applied unconditionally it would replay on every page load; the keyframe
-    # ends at scale(1) so dropping it on uncheck is invisible.
-    assert "checked ~ .fc-pop { animation: fc-pop" in app.CSS
-    # not the unconditional form, which would fire on load
-    assert "\n.fc-pop { animation" not in app.CSS
-
-
-def test_cards_are_wrapped_for_the_pop() -> None:
-    rendered = app.render_cards([_sourced(_card())])
-    assert '<div class="fc-pop">' in rendered
-    assert rendered.count("</div></div></label>") == 1
+def test_the_ground_paints_its_own_paper() -> None:
+    # The grain multiplies. Over a transparent layer that turned the page black.
+    ground = app.CSS.split("#ground{")[1].split("}")[0]
+    assert "background:var(--paper)" in ground
 
 
 def test_every_animation_is_dropped_under_reduced_motion() -> None:
-    # There is more than one reduced-motion block; check across all of them.
     blocks = "".join(app.CSS.split("prefers-reduced-motion")[1:])
-    for selector in ("#ground .bloom", "#ground .rules", "#ground .grain",
-                     ".fc-pop", ".fc-face::after"):
+    for selector in ("#ground .bloom", ".fc,.fc-inner", "#genbtn"):
         assert selector in blocks
+
+
+# --- light and dark switching ----------------------------------------------
+
+
+def test_the_mode_switch_needs_no_javascript() -> None:
+    # Gradio gives no client-side state, so the toggle is two radios and
+    # :has(). A JS toggle would simply not have been buildable here.
+    header = app.header_html(0)
+    assert '<input type="radio" name="fcmode" id="m-light">' in header
+    assert '<input type="radio" name="fcmode" id="m-dark">' in header
+    assert "<script" not in header
+    assert "body:has(#m-dark:checked)" in app.CSS
+
+
+def test_the_mode_radios_are_taken_out_of_the_layout() -> None:
+    """They rendered as three visible dots above the title.
+
+    Gradio's own input styling overrides the `hidden` attribute, so they have
+    to be positioned out of flow instead. Not display:none -- that stops the
+    label activating them in some browsers.
+    """
+    rule = app.CSS.split("#m-light,#m-dark{")[1].split("}")[0]
+    assert "position:absolute" in rule and "opacity:0" in rule
+    assert "display:none" not in rule
+
+
+def test_untouched_toggle_follows_the_operating_system() -> None:
+    # Absence of a choice means auto, rather than a third radio carrying a
+    # `checked` attribute that Gradio may drop when it re-renders the block.
+    assert "m-auto" not in app.CSS and "m-auto" not in app.header_html(0)
+    assert (
+        "body:not(:has(#m-light:checked)):not(:has(#m-dark:checked))" in app.CSS
+    )
+
+
+def test_an_explicit_choice_outranks_the_system_preference() -> None:
+    # Same specificity, so the explicit rules must be declared after the media
+    # query or clicking "light" on a dark OS would do nothing.
+    css = app.CSS
+    assert css.index("@media (prefers-color-scheme: dark)") < css.index(
+        "body:has(#m-light:checked){"
+    )
+
+
+# --- the Max chunks field --------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(None, 5), ("", 5), ("abc", 5), (0, 1), (-3, 1), (4.7, 4), (12, 12), ("8", 8)],
+)
+def test_chunk_limit_survives_whatever_the_number_box_sends(
+    value: object, expected: int
+) -> None:
+    """Clearing the box sends None and int() raised on it.
+
+    That surfaced as a bare "Error" in the results column with nothing to act
+    on. Zero or a negative would also slice the chunk list from the wrong end
+    and silently drop work.
+    """
+    assert app.chunk_limit(value) == expected
+
+
+@pytest.mark.parametrize("value", [None, "", "abc", 0, -3])
+def test_a_cleared_max_chunks_still_previews(value: object) -> None:
+    status, _ = app.preview(NOTES, None, value)
+    assert "Estimate" in status
+
+
+@pytest.mark.parametrize("value", [None, "", 0])
+def test_a_cleared_max_chunks_still_generates(value: object) -> None:
+    _, status, cards_html, download = last(app.generate(NOTES, None, value, False))
+    assert "What is tokenization?" in cards_html
+    assert download["visible"] is True
+
+
+def test_the_header_wraps_on_a_phone() -> None:
+    """At 375px the twenty-tick ration ran off the right edge, clipping the
+    counter. The header carries inline styles, so only !important reaches it."""
+    mobile = app.CSS.split("@media (max-width:900px)")[1].split("\n}")[0]
+    assert ".hd{flex-direction:column !important" in mobile
+    assert ".ticks{justify-content:flex-start !important}" in mobile
+    assert 'class="hd"' in app.header_html(0)
+    assert 'class="ration"' in app.header_html(0)
+    assert 'class="ticks"' in app.header_html(0)

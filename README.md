@@ -61,6 +61,17 @@ the left, results on the right — collapsing to one column below 900px. Paste
 notes or upload `.md`/`.txt`, press **Preview** for a free estimate, then
 **Generate**.
 
+The header carries a **daily ration**: twenty tick marks that fill as requests
+are spent, because the 20-a-day cap is otherwise invisible until it bites. The
+count is real, persisted per Pacific day in `.llm_cache/daily-usage.json` so it
+resets when Google's does. It counts what the website spends — CLI and benchmark
+runs go through the same quota but are not currently added to the strip.
+
+Preview costs nothing and prices the run before you commit: the Generate button
+relabels itself to *"spends 3 of your 20"*. Light and dark both ship, following
+`prefers-color-scheme` until you pick one from the header toggle — three radios
+and `:has()`, no JavaScript.
+
 To reach it from another device on the same network:
 
 ```powershell
@@ -127,6 +138,7 @@ Three canvases, none of them needed to run the app:
 |---|---|
 | `design-directions/` | The current Ruled Paper design: nine screens plus the flip-card anatomy. `build_screens.py` generates them from one definition. |
 | `design-motion/` | The drifting-ledger ground and card motion, as living artboards. |
+| `design-press/` | **Press Room**, the current design: riso ground, the ration strip, every screen state in light and dark. `build_screens.py` generates the artboards; `contrast.py` measures the palette. |
 | `design/` | Retired. A pointer saying the old dark layout was superseded. |
 
 The folder names predate what they ended up holding; `design-directions/` is the
@@ -138,7 +150,7 @@ current design, not a set of options.
 pytest
 ```
 
-198 tests, no network calls. The SDK client is stubbed and the embedding encoder
+247 tests, no network calls. The SDK client is stubbed and the embedding encoder
 is faked, so the suite runs offline in about 3 seconds.
 
 ## Benchmark results
