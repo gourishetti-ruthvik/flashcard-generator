@@ -478,10 +478,59 @@ def test_the_day_key_is_pacific(settings: Settings) -> None:
 
     client.record_spend(settings, 2)
     stored = json.loads(client.usage_file(settings).read_text(encoding="utf-8"))
-    assert list(stored) == [datetime.now(client.PACIFIC).strftime("%Y-%m-%d")]
+    assert stored["day"] == datetime.now(client.PACIFIC).strftime("%Y-%m-%d")
+    assert stored["spent"] == 2
 
 
 def test_a_corrupt_counter_reads_as_zero(settings: Settings) -> None:
     client.usage_file(settings).parent.mkdir(parents=True, exist_ok=True)
     client.usage_file(settings).write_text("{not json", encoding="utf-8")
     assert client.spent_today(settings) == 0
+
+
+# --- remembering that the day is over --------------------------------------
+
+
+def test_a_daily_cap_refusal_is_remembered(settings: Settings, fake_api) -> None:
+    """The bug this fixes: a refusal consumes nothing, so it never moved the
+    spend counter, and the ration went on reporting requests available for the
+    rest of the day while every generate failed."""
+    assert not client.cap_reached_today(settings)
+    fake_api([_quota_error(DAILY, delay="0s")])
+    with pytest.raises(errors.APIError):
+        GeminiClient(settings).generate_text("prompt")
+    assert client.cap_reached_today(settings)
+
+
+def test_a_per_minute_refusal_is_not_remembered(
+    settings: Settings, fake_api
+) -> None:
+    # The minute window reopens on its own; only the day is worth latching.
+    fake_api([_quota_error(PER_MINUTE, delay="0s")])
+    with pytest.raises(errors.APIError):
+        GeminiClient(settings).generate_text("prompt")
+    assert not client.cap_reached_today(settings)
+
+
+def test_the_cap_flag_still_costs_no_quota(settings: Settings, fake_api) -> None:
+    fake_api([_quota_error(DAILY, delay="0s")])
+    with pytest.raises(errors.APIError):
+        GeminiClient(settings).generate_text("prompt")
+    assert client.spent_today(settings) == 0  # a refusal consumes nothing
+
+
+def test_the_cap_and_the_count_live_together(settings: Settings) -> None:
+    client.record_spend(settings, 5)
+    client.record_cap_reached(settings)
+    assert client.spent_today(settings) == 5
+    assert client.cap_reached_today(settings)
+
+
+def test_a_stale_day_reads_as_a_fresh_one(settings: Settings) -> None:
+    # Yesterday's cap must not keep today locked out.
+    client.usage_file(settings).parent.mkdir(parents=True, exist_ok=True)
+    client.usage_file(settings).write_text(
+        json.dumps({"day": "1999-01-01", "spent": 20, "capped": True}), encoding="utf-8"
+    )
+    assert client.spent_today(settings) == 0
+    assert not client.cap_reached_today(settings)

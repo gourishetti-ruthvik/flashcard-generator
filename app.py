@@ -36,6 +36,7 @@ from flashcards.chunker import estimate_tokens
 from flashcards.client import (
     DAILY_CAP,
     GeminiClient,
+    cap_reached_today,
     is_daily_cap,
     quota_day,
     record_spend,
@@ -296,7 +297,16 @@ def counter_is_ephemeral(env: dict[str, str] | None = None) -> bool:
     return source.get("FLASHCARDS_EPHEMERAL", "").lower() in TRUTHY
 
 
-def header_html(spent: int) -> str:
+def header_html(spent: int, capped: bool = False) -> str:
+    if capped:
+        # The API has said the day is over. That outranks any local tally --
+        # the count cannot see requests spent by the CLI, by another instance,
+        # or before this container started, but a refusal is ground truth.
+        note = (
+            '<b style="color:var(--oranget);font-weight:600">ration spent</b> '
+            f"&middot; resets in {resets_in()}"
+        )
+        return _header_shell(DAILY_CAP, note)
     if counter_is_ephemeral():
         note = (
             f'<b style="color:var(--ink);font-weight:600">{spent}</b> spent since '
@@ -744,14 +754,19 @@ def preview(notes_text: str, files: list[str] | None, max_chunks: float):
         )
 
     chunks = gather_chunks(notes_text, files, settings)[: chunk_limit(max_chunks)]
-    spent = spent_today(settings)
+    spent, capped = current_ration(settings)
     if not chunks:
-        return NO_INPUT, generate_label, header_html(spent)
+        return NO_INPUT, generate_label, header_html(spent, capped)
 
     tokens = sum(estimate_tokens(chunk.text) for chunk in chunks)
-    left = max(0, DAILY_CAP - spent)
+    # A refusal outranks the local count: it can't see what the CLI or another
+    # instance spent, but the API telling us the day is over is ground truth.
+    left = 0 if capped else max(0, DAILY_CAP - spent)
     return (
-        render_estimate(len(chunks), tokens, settings.requests_per_minute, spent),
+        render_estimate(
+            len(chunks), tokens, settings.requests_per_minute,
+            DAILY_CAP if capped else spent,
+        ),
         # The cost rides on the button itself, so pressing Generate is a
         # considered act rather than a reflex.
         gr.update(
@@ -759,7 +774,7 @@ def preview(notes_text: str, files: list[str] | None, max_chunks: float):
             if left
             else "Generate · nothing left today"
         ),
-        header_html(spent),
+        header_html(spent, capped),
     )
 
 
@@ -779,10 +794,10 @@ def generate(
         )
         return
 
-    spent = spent_today(settings)
+    spent, capped = current_ration(settings)
     chunks = gather_chunks(notes_text, files, settings)[: chunk_limit(max_chunks)]
     if not chunks:
-        yield header_html(spent), NO_INPUT, "", hide
+        yield header_html(spent, capped), NO_INPUT, "", hide
         return
 
     rpm = settings.requests_per_minute
@@ -801,7 +816,7 @@ def generate(
             f"Waiting for the {rpm}-a-minute limit." if index and index % rpm == 0 else ""
         )
         yield (
-            header_html(spent_today(settings)),
+            header_html(*current_ration(settings)),
             render_progress(rows, extra, waiting),
             render_cards(outcome.entries),
             hide,
@@ -810,7 +825,7 @@ def generate(
         result = pipeline.run([chunk], settings, client)
         if result.api_error is not None:
             exc = result.api_error
-            spent = spent_today(settings)
+            spent, capped = current_ration(settings)
             if is_daily_cap(exc):
                 status = render_quota_spent(spent, len(outcome.entries))
             else:
@@ -825,7 +840,7 @@ def generate(
                     _RATE_STEPS if exc.code == 429 else (),
                 )
             yield (
-                header_html(spent),
+                header_html(spent, capped),
                 status,
                 render_cards(outcome.entries),
                 hide,
@@ -838,7 +853,7 @@ def generate(
         rows[index][1] = "done"
         rows[index][2] = f"{len(result.cards)} cards"
         yield (
-            header_html(spent_today(settings)),
+            header_html(*current_ration(settings)),
             render_progress(rows, extra),
             render_cards(outcome.entries),
             hide,
@@ -847,7 +862,7 @@ def generate(
     if use_dedupe:
         extra[0][1] = "active"
         yield (
-            header_html(spent_today(settings)),
+            header_html(*current_ration(settings)),
             render_progress(rows, extra),
             render_cards(outcome.entries),
             hide,
@@ -867,7 +882,7 @@ def generate(
     outcome.requests = client.request_count
     outcome.cache_hits = client.cache_hits
     # Cached replies never reach _call_with_retry, so they never counted.
-    spent = spent_today(settings)
+    spent, capped = current_ration(settings)
 
     summary = render_summary(
         len(outcome.entries),
@@ -886,7 +901,7 @@ def generate(
         )
 
     yield (
-        header_html(spent),
+        header_html(spent, capped),
         summary,
         render_cards(outcome.entries),
         gr.update(value=outcome.csv_path, visible=True),
@@ -899,6 +914,10 @@ GROUND = (
     '<div id="ground"><div class="bloom b1"></div><div class="bloom b2"></div>'
     '<div class="grain"></div></div>'
 )
+
+
+def current_ration(settings: Settings) -> tuple[int, bool]:
+    return spent_today(settings), cap_reached_today(settings)
 
 
 def initial_spent() -> int:
@@ -915,7 +934,10 @@ def refresh_header() -> str:
     the strip froze at whatever the count was when the server booted. A CLI or
     benchmark run spends from the same twenty and would never have shown up.
     """
-    return header_html(initial_spent())
+    try:
+        return header_html(*current_ration(load_settings()))
+    except ConfigError:
+        return header_html(0)
 
 
 with gr.Blocks(title="Flashcards") as demo:

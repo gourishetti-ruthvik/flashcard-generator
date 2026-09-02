@@ -62,7 +62,13 @@ notes or upload `.md`/`.txt`, press **Preview** for a free estimate, then
 **Generate**.
 
 The header carries a **daily ration**: twenty tick marks that fill as requests
-are spent, because the 20-a-day cap is otherwise invisible until it bites. The
+are spent, because the 20-a-day cap is otherwise invisible until it bites.
+
+A refused request consumes nothing, so it never moves the count — which meant
+the strip went on reporting requests available all day while every generate
+failed. The client now latches the API's own "day is over" signal, and that
+outranks the local tally: the count cannot see what the CLI or another instance
+spent, but a refusal is ground truth. The
 count is recorded inside the client wrapper, so the CLI, the benchmark and the
 website all move the same number — `flashcards generate` and `flashcards
 benchmark` print it too. It lives in `.llm_cache/daily-usage.json`, keyed by
@@ -207,7 +213,7 @@ current design, not a set of options.
 pytest
 ```
 
-283 tests, no network calls. The SDK client is stubbed and the embedding encoder
+293 tests, no network calls. The SDK client is stubbed and the embedding encoder
 is faked, so the suite runs offline in about 3 seconds.
 
 ## Benchmark results

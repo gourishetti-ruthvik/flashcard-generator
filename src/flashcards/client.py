@@ -58,33 +58,64 @@ def usage_file(settings: Settings) -> Path:
     return settings.cache_dir / "daily-usage.json"
 
 
-def spent_today(settings: Settings) -> int:
-    """Requests already spent in the current Pacific day.
+def _read_usage(settings: Settings) -> dict:
+    """Today's record, or an empty one.
 
-    A missing or corrupt file reads as zero rather than raising: the count is
-    an aid, and refusing to run because a counter is unparsable would be worse
-    than briefly under-reporting it.
+    A missing, corrupt or stale-dated file reads as empty rather than raising:
+    the count is an aid, and refusing to run because a counter is unparsable
+    would be worse than briefly under-reporting it.
     """
     try:
         data = json.loads(usage_file(settings).read_text(encoding="utf-8"))
-        return int(data.get(quota_day(), 0))
+        if isinstance(data, dict) and data.get("day") == quota_day():
+            return data
     except (OSError, ValueError, TypeError):
+        pass
+    return {}
+
+
+def _write_usage(settings: Settings, record: dict) -> None:
+    path = usage_file(settings)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Only today is kept; yesterday's count answers no question worth the
+        # file growing forever.
+        path.write_text(json.dumps(record), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def spent_today(settings: Settings) -> int:
+    try:
+        return int(_read_usage(settings).get("spent", 0))
+    except (TypeError, ValueError):
         return 0
 
 
 def record_spend(settings: Settings, count: int = 1) -> int:
     if count <= 0:
         return spent_today(settings)
+    record = _read_usage(settings)
     total = spent_today(settings) + count
-    path = usage_file(settings)
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        # Only today's key is kept; yesterday's count answers no question worth
-        # the file growing forever.
-        path.write_text(json.dumps({quota_day(): total}), encoding="utf-8")
-    except OSError:
-        pass
+    _write_usage(settings, {**record, "day": quota_day(), "spent": total})
     return total
+
+
+def cap_reached_today(settings: Settings) -> bool:
+    """Has the API already told us today's allowance is gone?
+
+    Worth remembering, because a refused request consumes nothing and so never
+    moves the spend counter. Without this the strip reports requests available
+    for the rest of the day while every generate fails -- the count says
+    "plenty left" and the API says "nothing left", and only one of them is
+    right.
+    """
+    return bool(_read_usage(settings).get("capped"))
+
+
+def record_cap_reached(settings: Settings) -> None:
+    record = _read_usage(settings)
+    _write_usage(settings, {**record, "day": quota_day(), "capped": True})
 
 
 class GeminiError(RuntimeError):
@@ -264,6 +295,11 @@ class GeminiClient:
                 # nothing. Anything else reached the server and did.
                 if exc.code != 429:
                     record_spend(self._settings)
+                elif is_daily_cap(exc):
+                    # The refusal itself costs nothing, but it is the only
+                    # honest signal we ever get that the day is over. Throwing
+                    # it away is what let the ration keep saying "plenty left".
+                    record_cap_reached(self._settings)
                 if (
                     exc.code not in RETRY_CODES
                     or attempt == self._settings.max_attempts - 1

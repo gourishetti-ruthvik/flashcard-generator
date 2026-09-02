@@ -121,7 +121,7 @@ def test_ration_is_keyed_by_pacific_day(settings: Settings) -> None:
     """
     app.record_spend(settings, 4)
     stored = json.loads(app.usage_file(settings).read_text(encoding="utf-8"))
-    assert list(stored) == [app.quota_day()]
+    assert stored["day"] == app.quota_day()
 
 
 def test_a_corrupt_counter_reads_as_zero(settings: Settings) -> None:
@@ -833,3 +833,58 @@ def test_the_blueprint_start_command_would_demand_a_password() -> None:
     }
     with pytest.raises(SystemExit, match="reachable beyond localhost"):
         app.launch_kwargs(env)
+
+
+# --- the strip must not claim quota the API has refused --------------------
+
+
+def test_a_remembered_cap_overrides_the_local_count() -> None:
+    """The reported bug: reload the page and the ration says requests are
+    available, but nothing generates.
+
+    The local count cannot see what the CLI, another instance, or an earlier
+    container spent. A refusal from the API can, so it wins.
+    """
+    header = app.header_html(0, capped=True)
+    assert "ration spent" in header
+    assert "of 20 left" not in header
+    assert "20 of 20" not in header
+
+
+def test_the_capped_strip_is_visibly_full() -> None:
+    # All twenty marks filled, so it reads as spent at a glance.
+    assert app.header_html(0, capped=True).count("background:") == app.DAILY_CAP
+
+
+def test_preview_refuses_to_price_a_run_when_capped(settings: Settings) -> None:
+    from flashcards import client as client_mod
+
+    client_mod.record_cap_reached(settings)
+    status, button, header = app.preview(NOTES, None, 5)
+    assert button["value"] == "Generate · nothing left today"
+    assert "ration spent" in header
+    assert "Preview stays free" in status or "twenty are gone" in status
+
+
+def test_an_uncapped_day_still_reports_normally(settings: Settings) -> None:
+    _, button, header = app.preview(NOTES, None, 5)
+    assert "spends 1 of your 20" in button["value"]
+    assert "20</b> of 20 left" in header
+
+
+def test_generate_latches_the_cap_for_later_reloads(
+    monkeypatch: pytest.MonkeyPatch, settings: Settings
+) -> None:
+    """After a capped run, a reload must still show the ration as spent."""
+    from flashcards import client as client_mod
+
+    class Exhausted(FakeClient):
+        def generate_cards(self, prompt: str) -> list[Flashcard]:
+            client_mod.record_cap_reached(settings)  # what the real client does
+            raise _quota_error(DAILY)
+
+    monkeypatch.setattr(app, "GeminiClient", lambda _: Exhausted())
+    header, status, _, _ = last(app.generate(NOTES, None, 5, False))
+    assert "ration spent" in header
+    # and the next page load, with a fresh header, still says so
+    assert "ration spent" in app.refresh_header()
