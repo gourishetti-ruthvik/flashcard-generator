@@ -7,3 +7,5 @@ __pycache__/
 cards.csv
 *.csv
 benchmark-results.jsonl
+.claude/
+*.log
