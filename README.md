@@ -61,10 +61,20 @@ long enough to cross the 800-token limit and split on paragraphs.
 flashcards generate samples/ --dry-run
 ```
 
-Dry-running them is free, and it shows something worth knowing: of the eleven
-chunks they produce, three are under 60 tokens — two intro paragraphs sitting
-before the first `##`, and one orphaned tail. Each still costs a full request.
-The chunker enforces a maximum chunk size but no minimum.
+Dry-running them is free, and it used to show a problem: eleven chunks, three
+of them under 60 tokens — two intro paragraphs sitting before the first `##`,
+and one orphaned tail — each costing a whole request. On twenty a day that was
+15% of the allowance spent on scraps.
+
+The chunker now has a **minimum** as well as a maximum (`min_chunk_tokens`,
+default 100). A part below it is folded into a neighbour: a preamble forward
+into what it introduces, an orphaned tail back into its section. The same notes
+now produce **eight** chunks with nothing under 100 tokens, and `notes/` is
+untouched, so the benchmark's recorded chunk ids still match.
+
+A merge may exceed the target by up to the minimum. The target rests on a
+four-chars-per-token estimate, so refusing to join 765 and 36 because 801
+crosses 800 would keep the orphan for no real reason.
 
 Import the CSV with **File → Import** in Anki. The file carries
 `#separator:Comma` and `#columns:Front,Back,Tags`, so field mapping is automatic.
@@ -194,7 +204,7 @@ loader -> chunker -> [client] -> validator -> dedupe -> exporter
 |---|---|
 | `config.py` | Settings from `.env`; the only place the model ID lives |
 | `loader.py` | Find note files, strip Markdown (headings survive) |
-| `chunker.py` | Split on headings, then paragraphs, then sentences |
+| `chunker.py` | Split on headings, then paragraphs, then sentences; fold undersized parts into a neighbour |
 | `prompts.py` | Build both prompt variants |
 | `client.py` | The only thing that touches the API |
 | `validator.py` | Semantic checks the JSON schema cannot express |
@@ -250,7 +260,7 @@ current design, not a set of options.
 pytest
 ```
 
-293 tests, no network calls. The SDK client is stubbed and the embedding encoder
+301 tests, no network calls. The SDK client is stubbed and the embedding encoder
 is faked, so the suite runs offline in about 3 seconds.
 
 ## Benchmark results

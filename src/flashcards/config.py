@@ -37,6 +37,9 @@ class Settings(BaseModel):
     requests_per_minute: int = Field(default=5, gt=0)
     max_attempts: int = Field(default=4, gt=0)
     daily_cap: int = Field(default=20, gt=0)
+    # A chunk below this is folded into a neighbour rather than spending a
+    # whole request. Set to 0 to disable the merge entirely.
+    min_chunk_tokens: int = Field(default=100, ge=0)
 
     cache_dir: Path = PROJECT_ROOT / ".llm_cache"
     note_suffixes: tuple[str, ...] = (".md", ".txt")

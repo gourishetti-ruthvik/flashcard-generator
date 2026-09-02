@@ -15,6 +15,20 @@ from flashcards.models import Flashcard, SourcedCard
 
 NOTES = "# Tokenization\n\nTokenization splits text into smaller units."
 
+# A section long enough to survive the chunker's minimum size. Two-word bodies
+# get folded into a neighbour, which is correct but makes a chunk-count test
+# measure the merge rather than the thing it is named after.
+SECTION = (
+    "# H{n}\n\nBody number {n} here, written long enough to stand on its own as "
+    "a chunk rather than being folded into its neighbour. It runs to several "
+    "sentences so the four-chars-per-token estimate clears the floor with room "
+    "to spare, and the test measures what it says it measures. Padding follows, "
+    "because the minimum is one hundred tokens and four characters make a token, "
+    "so a section has to run past four hundred characters before it survives on "
+    "its own. That is a couple of paragraphs of ordinary prose, which is about "
+    "what a real lecture note section looks like anyway."
+)
+
 
 def _card(question: str = "What is tokenization?", **kwargs: Any) -> Flashcard:
     return Flashcard(
@@ -282,7 +296,7 @@ def test_the_rate_limit_pause_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
     At five a minute a longer run visibly stalls, so the wait is labelled
     rather than hidden behind a spinner.
     """
-    long_notes = "\n\n".join(f"# H{n}\n\nBody number {n} here." for n in range(7))
+    long_notes = "\n\n".join(SECTION.format(n=n) for n in range(7))
     frames = [f[1] for f in app.generate(long_notes, None, 7, False)]
     assert any("Waiting for the 5-a-minute limit" in f for f in frames)
     assert any("This pause is the rate limiter, not a stall" in f for f in frames)
@@ -299,7 +313,7 @@ def test_csv_is_importable() -> None:
 def test_limit_caps_requests(monkeypatch: pytest.MonkeyPatch) -> None:
     client = FakeClient()
     monkeypatch.setattr(app, "GeminiClient", lambda _: client)
-    long_notes = "\n\n".join(f"# H{n}\n\nBody number {n} here." for n in range(5))
+    long_notes = "\n\n".join(SECTION.format(n=n) for n in range(5))
     last(app.generate(long_notes, None, 2, False))
     assert client.request_count == 2
 

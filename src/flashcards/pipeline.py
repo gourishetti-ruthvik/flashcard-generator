@@ -32,7 +32,12 @@ def collect_chunks(source: Path, settings: Settings) -> list[Chunk]:
     chunks: list[Chunk] = []
     for path in loader.discover(source, settings.note_suffixes):
         chunks.extend(
-            chunk_text(loader.load(path), path, settings.chunk_target_tokens)
+            chunk_text(
+                loader.load(path),
+                path,
+                settings.chunk_target_tokens,
+                settings.min_chunk_tokens,
+            )
         )
     return chunks
 
@@ -42,7 +47,10 @@ def chunks_from_text(text: str, settings: Settings, name: str = "pasted") -> lis
     # Chunk.source_path.stem meaningful, so the exporter's source tag needs no
     # special case for this route.
     return chunk_text(
-        loader.strip_markdown(text), Path(f"{name}.md"), settings.chunk_target_tokens
+        loader.strip_markdown(text),
+        Path(f"{name}.md"),
+        settings.chunk_target_tokens,
+        settings.min_chunk_tokens,
     )
 
 

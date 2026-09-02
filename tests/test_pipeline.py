@@ -115,8 +115,12 @@ def test_source_may_be_a_single_file(notes: Path, settings: Settings) -> None:
 
 
 def test_chunks_from_text_splits_on_headings(settings: Settings) -> None:
+    # Bodies long enough to stand alone. Two-word sections are folded together
+    # by the minimum-size rule, which is a separate behaviour tested below.
+    alpha = "Alpha body. " * 50
+    beta = "Beta body. " * 50
     chunks = pipeline.chunks_from_text(
-        "# One\n\nAlpha body.\n\n# Two\n\nBeta body.", settings
+        f"# One\n\n{alpha}\n\n# Two\n\n{beta}", settings
     )
     assert [c.heading for c in chunks] == ["One", "Two"]
 
