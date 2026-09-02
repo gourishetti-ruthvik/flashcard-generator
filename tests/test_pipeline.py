@@ -3,11 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from google.genai import errors
 
 from flashcards import pipeline
 from flashcards.client import GeminiError
 from flashcards.config import Settings
-from flashcards.models import Flashcard
+from flashcards.models import Chunk, Flashcard
 
 
 class FakeClient:
@@ -136,3 +137,45 @@ def test_chunks_from_text_names_the_source(settings: Settings) -> None:
 def test_chunks_from_text_on_empty_input(settings: Settings) -> None:
     assert pipeline.chunks_from_text("", settings) == []
     assert pipeline.chunks_from_text("   \n\n  ", settings) == []
+
+
+def test_an_api_refusal_stops_the_run_and_keeps_what_was_paid_for(
+    settings: Settings,
+) -> None:
+    """It used to escape uncaught, giving the CLI a raw traceback and throwing
+    away cards that had already cost real quota.
+
+    Stopping rather than continuing matters too: a quota refusal applies to
+    every remaining chunk, so carrying on would spend the rest of the
+    allowance learning the same thing.
+    """
+
+    class Refusing:
+        def __init__(self) -> None:
+            self.request_count = 0
+            self.cache_hits = 0
+
+        def generate_cards(self, prompt: str) -> list[Flashcard]:
+            self.request_count += 1
+            if self.request_count > 1:
+                raise errors.APIError(429, {"error": {"message": "quota"}})
+            return [
+                Flashcard(
+                    question="What is a deadlock?",
+                    answer="A set of processes each waiting on another.",
+                    topic="Operating Systems",
+                    difficulty="easy",
+                )
+            ]
+
+    client = Refusing()
+    chunks = [
+        Chunk(text=f"body {n}", source_path=Path("notes/a.md"), heading="H", index=n)
+        for n in range(4)
+    ]
+    result = pipeline.run(chunks, settings, client)
+
+    assert len(result.cards) == 1          # the one that was paid for survives
+    assert result.api_error is not None
+    assert result.api_error.code == 429
+    assert client.request_count == 2       # stopped, did not try chunks 3 and 4

@@ -3,10 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
+from google.genai import errors
 
 from flashcards import __version__, benchmark as benchmark_mod, dedupe, exporter, pipeline
 from flashcards.chunker import estimate_tokens
-from flashcards.client import GeminiClient, resets_in, spent_today
+from flashcards.client import GeminiClient, is_daily_cap, resets_in, spent_today
 from flashcards.config import ConfigError, Settings, load_settings
 
 app = typer.Typer(
@@ -96,6 +97,19 @@ def generate(
 
     for failure in result.failures:
         typer.secho(f"chunk failed: {failure}", fg=typer.colors.RED)
+
+    if result.api_error is not None:
+        exc = result.api_error
+        advice = (
+            f"Today's cap is spent; it resets in {resets_in()}."
+            if is_daily_cap(exc)
+            else "Wait a minute and run it again."
+        )
+        typer.secho(
+            f"\nstopped early: the API refused (HTTP {exc.code}). {advice}",
+            fg=typer.colors.YELLOW,
+        )
+        typer.echo("The cards above are still yours, and the CSV still writes.")
 
     if out is not None:
         written = exporter.write_csv(entries, out)

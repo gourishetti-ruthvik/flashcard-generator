@@ -783,9 +783,9 @@ def generate(
             hide,
         )
 
-        try:
-            result = pipeline.run([chunk], settings, client)
-        except errors.APIError as exc:
+        result = pipeline.run([chunk], settings, client)
+        if result.api_error is not None:
+            exc = result.api_error
             spent = spent_today(settings)
             if is_daily_cap(exc):
                 status = render_quota_spent(spent, len(outcome.entries))

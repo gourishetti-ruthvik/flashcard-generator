@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from google.genai import errors
+
 from flashcards import loader
 from flashcards.chunker import chunk_text
 from flashcards.client import GeminiClient, GeminiError
@@ -20,6 +22,10 @@ class Result:
     failures: list[str] = field(default_factory=list)
     requests: int = 0
     cache_hits: int = 0
+    # Set when the run stopped early because the API refused. Kept as the
+    # exception rather than a flag so callers can tell a per-minute
+    # throttle from a spent daily cap and say something useful.
+    api_error: errors.APIError | None = None
 
 
 def collect_chunks(source: Path, settings: Settings) -> list[Chunk]:
@@ -58,6 +64,13 @@ def run(
             # One bad chunk should not throw away the cards already paid for.
             result.failures.append(f"{chunk.source_path.name}#{chunk.index}: {exc}")
             continue
+        except errors.APIError as exc:
+            # Stop rather than continue: a quota refusal applies to every
+            # remaining chunk too, so carrying on would spend the rest of the
+            # allowance learning the same thing. Escaping uncaught gave the CLI
+            # a raw traceback and threw away the cards already paid for.
+            result.api_error = exc
+            break
 
         kept, dropped = filter_cards(cards)
         result.cards.extend(
