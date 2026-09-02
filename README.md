@@ -202,23 +202,23 @@ before parsing, so without that count its 0% failure rate could equally mean
 
 ### Results
 
-Measurement in progress. Earlier passes are recorded here only so the numbers
-are not mistaken for a finished result:
+3 chunks, `--repeats 3`, full 18-call run (`benchmark-results.jsonl`), timer
+fixed to the HTTP call alone:
 
-| Pass | Arm | Runs | Failed | Mean latency | Usable? |
+| Arm | Runs | Failed | Rate | Mean latency | Cards |
 |---|---|---|---|---|---|
-| 3 chunks, 1 repeat | JSON mode | 3 | 0 | 3.19s | n too small |
-| 3 chunks, 1 repeat | Prompt-based | 3 | 0 | 3.25s | n too small |
-| `--repeats 5` | JSON mode | 9 | 0 | 8.81s | no — timer included throttling |
-| `--repeats 5` | Prompt-based | 6 | 0 | 7.36s | no — same, and biased by call order |
-| single call, timer fixed | JSON mode | 1 | 0 | 3.01s | consistent with the 3.19s above |
+| JSON mode (`response_schema`) | 9 | 0 | 0% | 2.90s | 38 |
+| Prompt-based JSON instructions | 9 | 0 | 0% | 2.98s | 37 |
 
-**No parse failure has been observed in any arm**, and **0 of 6** prompt-based
-replies needed a fence stripped. That is the substantive finding so far: on
-short, clean prose, a well-specified prompt returns valid JSON without the
-schema, so the schema's guarantee is not what is doing the work. What is still
-missing is a latency comparison at a sample size worth quoting.
+Code fences stripped: **0 of 9** prompt-based replies.
 
-JSON mode stays the default regardless: it moves the guarantee from a prompt the
-model may ignore to a constraint applied at decode time. The cost of being wrong
-about a prompt is a failed chunk; the cost of the schema is nothing measurable.
+Nine runs per arm is a small sample, and the 0.08s latency gap is well within
+call-to-call noise at this n — not a meaningful difference either way. No
+parse failure occurred in either arm, so on this note set a well-specified
+prompt returns valid JSON without the schema just as reliably as with it.
+
+JSON mode stays the default regardless: it moves the guarantee from a prompt
+the model may ignore to a constraint applied at decode time. This run gives no
+evidence it is faster, but none that it is slower either, and the cost of a
+prompt the model ignores (a failed chunk) is still worse than the cost of the
+schema (nothing measurable).
