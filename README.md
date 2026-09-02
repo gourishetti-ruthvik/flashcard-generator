@@ -47,6 +47,25 @@ day is not enough to finish a run in one sitting:
 | `--quota-stop N` | Give up after N consecutive API errors instead of grinding |
 | `--max-attempts N` | Attempts per call, default 2 — each retry spends a request |
 
+### Two sets of notes
+
+`notes/` holds the three files the benchmark runs against — leave them alone,
+or a resumed benchmark stops matching its own recorded results.
+
+`samples/` is for trying things out. The four files there deliberately exercise
+paths `notes/` cannot: `##` subheadings that split one file into four chunks,
+Markdown that has to be stripped, a `.txt` with no heading at all, and one note
+long enough to cross the 800-token limit and split on paragraphs.
+
+```powershell
+flashcards generate samples/ --dry-run
+```
+
+Dry-running them is free, and it shows something worth knowing: of the eleven
+chunks they produce, three are under 60 tokens — two intro paragraphs sitting
+before the first `##`, and one orphaned tail. Each still costs a full request.
+The chunker enforces a maximum chunk size but no minimum.
+
 Import the CSV with **File → Import** in Anki. The file carries
 `#separator:Comma` and `#columns:Front,Back,Tags`, so field mapping is automatic.
 
