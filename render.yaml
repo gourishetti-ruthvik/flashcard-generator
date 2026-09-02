@@ -1,6 +1,12 @@
 # Render blueprint. Create the service from this file with New > Blueprint,
 # pointing at this repo, then set the three secrets in the dashboard.
 #
+# The live service was NOT created from this file -- it was made through the
+# API, and Render does not read a blueprint back into an existing service. So
+# this describes how to stand a fresh one up; it is not the source of truth for
+# what is currently running. If you change something here, change it in the
+# dashboard too, or the two quietly drift apart.
+#
 # Nothing secret lives here. `sync: false` means "this service needs the
 # variable, ask me for it in the dashboard" -- Render prompts on first deploy
 # and stores the value itself, so no key ever lands in git.
