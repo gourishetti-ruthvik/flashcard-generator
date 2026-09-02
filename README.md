@@ -125,6 +125,13 @@ repo, and it creates the service. Then set three variables in the dashboard —
 `sync: false`, so Render asks for them and stores them itself; none of the three
 is ever in git.
 
+**Connect the repo, don't just paste its URL.** A service created from a public
+repo URL gets no webhook, so `autoDeploy: yes` is true and nothing happens on
+push. Add GitHub under
+[Account Settings → Git Deployment Credentials](https://dashboard.render.com/u/settings#account-security)
+and re-select the repository in the service's Build & Deploy settings. Until
+that is done, deploys have to be triggered by hand.
+
 What the free plan costs you, both specific to this app:
 
 - **The disk is wiped on every spin down** (15 minutes idle). That resets the
