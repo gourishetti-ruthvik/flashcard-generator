@@ -951,8 +951,50 @@ with gr.Blocks(title="Flashcards") as demo:
     )
 
 
+TRUTHY = {"1", "true", "yes", "on"}
+
+
+def share_auth(env: dict[str, str]) -> tuple[str, str] | None:
+    """Credentials for a public link, from the environment or not at all.
+
+    Read rather than hardcoded so no password lands in the repo, and so the
+    same file can run locally with no auth at all. Takes the mapping rather
+    than reading os.environ directly, or the caller's env argument would be a
+    lie and the guard untestable.
+    """
+    user = env.get("FLASHCARDS_USER")
+    password = env.get("FLASHCARDS_PASSWORD")
+    return (user, password) if user and password else None
+
+
+def launch_kwargs(env: dict[str, str]) -> dict:
+    """Refuse to open a public link without a password.
+
+    A share URL is reachable by anyone who has it and is guessable enough to
+    be found. Behind it sits a key that spends a 20-a-day allowance, so an
+    unauthenticated tunnel is not a convenience, it is someone else's quota.
+    """
+    kwargs: dict = {"css": CSS}
+    port = env.get("PORT")
+    if port:
+        # Gradio otherwise resolves host and port from GRADIO_SERVER_NAME /
+        # GRADIO_SERVER_PORT.
+        kwargs["server_port"] = int(port)
+
+    if env.get("GRADIO_SHARE", "").lower() not in TRUTHY:
+        return kwargs
+
+    auth = share_auth(env)
+    if auth is None:
+        raise SystemExit(
+            "GRADIO_SHARE is on but FLASHCARDS_USER and FLASHCARDS_PASSWORD are "
+            "not both set.\nA public link with no password lets anyone spend "
+            "your daily quota. Set them and try again."
+        )
+    kwargs["share"] = True
+    kwargs["auth"] = auth
+    return kwargs
+
+
 if __name__ == "__main__":
-    # server_port is passed only when PORT is set. Gradio otherwise resolves the
-    # host and port from GRADIO_SERVER_NAME / GRADIO_SERVER_PORT.
-    port = os.environ.get("PORT")
-    demo.launch(css=CSS, **({"server_port": int(port)} if port else {}))
+    demo.launch(**launch_kwargs(dict(os.environ)))

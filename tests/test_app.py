@@ -714,3 +714,44 @@ def test_a_run_that_still_fits_keeps_the_actionable_advice(
     # Only the zero case changes; "lower it to N" is real advice when N > 0.
     estimate = app.render_estimate(9, 2000, 5, spent=17)
     assert "Lower Max chunks to 3" in estimate
+
+
+# --- opening a public link -------------------------------------------------
+
+
+def test_local_launch_needs_no_password() -> None:
+    kwargs = app.launch_kwargs({})
+    assert "share" not in kwargs and "auth" not in kwargs
+
+
+def test_port_is_honoured_when_set() -> None:
+    assert app.launch_kwargs({"PORT": "8080"})["server_port"] == 8080
+
+
+def test_sharing_without_a_password_is_refused() -> None:
+    """A share URL is reachable by anyone holding it and guessable enough to
+    be found, and behind it sits a key spending a 20-a-day allowance."""
+    with pytest.raises(SystemExit, match="public link with no password"):
+        app.launch_kwargs({"GRADIO_SHARE": "True"})
+
+
+@pytest.mark.parametrize("half", [{"FLASHCARDS_USER": "me"},
+                                  {"FLASHCARDS_PASSWORD": "pw"}])
+def test_half_a_credential_is_still_refused(half: dict) -> None:
+    with pytest.raises(SystemExit):
+        app.launch_kwargs({"GRADIO_SHARE": "1", **half})
+
+
+def test_sharing_with_a_password_is_allowed() -> None:
+    kwargs = app.launch_kwargs(
+        {"GRADIO_SHARE": "true", "FLASHCARDS_USER": "me", "FLASHCARDS_PASSWORD": "pw"}
+    )
+    assert kwargs["share"] is True
+    assert kwargs["auth"] == ("me", "pw")
+
+
+def test_no_password_is_baked_into_the_repo() -> None:
+    # Credentials come from the environment so none ever lands in git.
+    source = Path(app.__file__).read_text(encoding="utf-8")
+    assert "FLASHCARDS_PASSWORD" in source
+    assert 'auth=("' not in source

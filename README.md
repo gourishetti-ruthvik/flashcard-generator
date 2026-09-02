@@ -82,9 +82,43 @@ $env:GRADIO_SERVER_NAME="0.0.0.0"; python app.py
 
 Then open `http://<this-machine's-lan-ip>:7860`.
 
-For a temporary public link set `GRADIO_SHARE="True"` instead — but add
-`auth=("user", "password")` to `launch()` first, because the generated URL is
-publicly guessable and anyone holding it spends your quota.
+### Reaching it from outside the house
+
+```powershell
+$env:GRADIO_SHARE="True"
+$env:FLASHCARDS_USER="you"; $env:FLASHCARDS_PASSWORD="something-long"
+python app.py
+```
+
+The app **refuses to open a public link unless both are set**. A share URL is
+reachable by anyone holding it and guessable enough to be found, and behind it
+sits a key spending a 20-a-day allowance, so an unauthenticated tunnel is not a
+convenience — it is someone else's quota.
+
+The tunnel needs **outbound TCP 7000** to `gradio-tunneling.hf.space`. That port
+times out on some networks (it does on the one this was built on), and the only
+symptom Gradio gives is "Could not create share link. Please check your internet
+connection", which points at the wrong thing. Test it before blaming the app:
+
+```powershell
+python -c "import socket; s=socket.socket(); s.settimeout(15); s.connect(('gradio-tunneling.hf.space',7000)); print('open')"
+```
+
+If that times out, the share link cannot work on that network. A different one
+— a phone hotspot, say — may well be fine.
+
+### Why not Hugging Face Spaces
+
+Because it is not free. From [their own docs](https://huggingface.co/docs/hub/spaces-overview#hardware-resources):
+
+> The default CPU Basic hardware has no hourly cost, but creating a Space that
+> runs on compute (Gradio or Docker) requires a paid plan, while Static Spaces
+> are free for everyone.
+
+Static Spaces serve files only. This app needs a server, because the API key has
+to stay server-side — that is the whole reason it never reaches the browser. So
+a Space means a paid plan, and if you ever take one, **make the Space private**:
+a public one lets anyone spend your twenty a day.
 
 ## Architecture
 
@@ -152,7 +186,7 @@ current design, not a set of options.
 pytest
 ```
 
-264 tests, no network calls. The SDK client is stubbed and the embedding encoder
+271 tests, no network calls. The SDK client is stubbed and the embedding encoder
 is faked, so the suite runs offline in about 3 seconds.
 
 ## Benchmark results
