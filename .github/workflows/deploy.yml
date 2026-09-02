@@ -1,0 +1,40 @@
+# Auto-deploy to Render on every push to main.
+#
+# Render's own auto-deploy needs the repo connected through its GitHub App.
+# This service was created from a bare repo URL and never picked that up --
+# `autoDeploy: yes` reported true while pushes did nothing, twice, which is a
+# worse failure than no automation at all. A deploy hook is deterministic:
+# Render gives the service a URL, and a POST to it starts a deploy.
+#
+# Setup, once:
+#   1. Render dashboard -> the service -> Settings -> Deploy Hook -> copy URL
+#   2. GitHub -> repo Settings -> Secrets and variables -> Actions -> New
+#      repository secret, named RENDER_DEPLOY_HOOK, pasted as the value
+#
+# The URL carries a key in its query string, so it lives in a secret and is
+# never echoed: curl writes only the status code.
+name: Deploy to Render
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK is not set."
+            echo "Add it under Settings > Secrets and variables > Actions."
+            echo "Copy the URL from Render: Settings > Deploy Hook."
+            exit 1
+          fi
+          # -f so an HTTP error fails the step rather than passing quietly,
+          # which is the exact way the previous setup misled us.
+          code=$(curl -fsS -X POST "$HOOK" -o /dev/null -w '%{http_code}')
+          echo "Render accepted the deploy request (HTTP $code)."

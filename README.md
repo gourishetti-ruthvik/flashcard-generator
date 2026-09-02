@@ -144,12 +144,23 @@ repo, and it creates the service. Then set three variables in the dashboard —
 `sync: false`, so Render asks for them and stores them itself; none of the three
 is ever in git.
 
-**Connect the repo, don't just paste its URL.** A service created from a public
-repo URL gets no webhook, so `autoDeploy: yes` is true and nothing happens on
-push. Add GitHub under
-[Account Settings → Git Deployment Credentials](https://dashboard.render.com/u/settings#account-security)
-and re-select the repository in the service's Build & Deploy settings. Until
-that is done, deploys have to be triggered by hand.
+**Auto-deploy runs through a deploy hook, not Render's GitHub connection.**
+A service created from a bare repo URL never picks up the webhook: `autoDeploy`
+reports `yes` while pushes do nothing, which is worse than no automation at
+all — it looks like it works. Connecting the account and re-linking the repo
+did not fix it here either.
+
+`.github/workflows/deploy.yml` POSTs to the service's deploy hook instead, which
+is deterministic. One-time setup:
+
+1. Render → the service → **Settings → Deploy Hook** → copy the URL
+2. GitHub → **Settings → Secrets and variables → Actions** → new repository
+   secret `RENDER_DEPLOY_HOOK`
+
+The URL carries a key, so it lives in a secret and is never echoed — the
+workflow prints only the HTTP status. Without the secret the job fails loudly
+rather than passing quietly, which is the exact failure mode that wasted an
+afternoon.
 
 What the free plan costs you, both specific to this app:
 
