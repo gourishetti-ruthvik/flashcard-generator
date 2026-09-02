@@ -194,7 +194,8 @@ body{{background:var(--paper);margin:0}}
      right edge and the counter was clipped. Inline styles lose to !important. */
   .hd{{flex-direction:column !important;align-items:flex-start !important;gap:14px}}
   .hd h1{{font-size:46px !important}}
-  .ration{{text-align:left !important;width:100%}}
+  .meta{{flex-wrap:wrap;gap:12px;width:100%}}
+  .ration{{flex-wrap:wrap;gap:9px;text-align:left !important;width:100%}}
   .ticks{{justify-content:flex-start !important}}
   #left{{flex:1 1 auto !important;position:static;max-height:none;width:100%}}
   .gradio-container{{padding:20px 18px 34px !important}}
@@ -239,7 +240,15 @@ body{{background:var(--paper);margin:0}}
 /* The mode pills are three radios, so "auto" can follow the OS and either pill
    can override it. No JavaScript: the whole switch is :has(). */
 #m-light,#m-dark{{position:absolute;opacity:0;width:0;height:0;pointer-events:none}}
-.modes{{display:inline-flex;border:1.5px solid var(--ink);margin-bottom:9px}}
+/* Between the 900px breakpoint and roughly 1130px the cluster no longer fits
+   beside the title, and the dark pill was being silently clipped rather than
+   scrolling. Wrapping drops it onto its own line, still right-aligned. */
+.hd{{flex-wrap:wrap}}
+.meta{{display:flex;align-items:center;gap:22px;flex:0 0 auto;
+ flex-wrap:wrap;justify-content:flex-end;margin-left:auto}}
+.ration{{display:flex;align-items:center;gap:12px}}
+.ration .lbl{{display:block}}
+.modes{{display:inline-flex;border:1.5px solid var(--ink);flex:0 0 auto}}
 .m{{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;font-family:{MONO};
  font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);cursor:pointer}}
 .m.lt{{background:var(--ink);color:var(--paper)}}
@@ -321,7 +330,7 @@ def ticks_html(spent: int, cap: int = DAILY_CAP) -> str:
                 'border:1.5px solid var(--blue)"></i>'
             )
     return (
-        '<div class="ticks" style="display:flex;gap:3px;margin:8px 0 7px;justify-content:flex-end;'
+        '<div class="ticks" style="display:flex;gap:3px;margin:0;justify-content:flex-end;'
         f'flex-wrap:wrap">{"".join(marks)}</div>'
     )
 
@@ -349,13 +358,17 @@ def header_html(spent: int) -> str:
         "Flashcards</h1>"
         f'<p style="margin:9px 0 0;font-family:{MONO};font-size:11px;letter-spacing:.16em;'
         'text-transform:uppercase;color:var(--mute)">notes in &middot; anki out</p></div>'
-        '<div class="ration" style="text-align:right;flex:0 0 auto">'
+        # One right-aligned row rather than four stacked ones: the ration read
+        # as a block of chrome when its label, strip and count each took a line.
+        '<div class="meta">'
+        '<div class="ration">'
+        f'<span class="lbl" style="{LBL}">Daily ration</span>'
+        f"{ticks_html(spent)}"
+        f'<p class="rn" style="margin:0;font-family:{MONO};font-size:11px;'
+        f'color:var(--ink2);white-space:nowrap">{note}</p></div>'
         '<div class="modes">'
         f'<label for="m-light" class="m lt">{_SUN}light</label>'
         f'<label for="m-dark" class="m dk">{_MOON}dark</label></div>'
-        f'<span style="{LBL};display:block">Daily ration</span>'
-        f"{ticks_html(spent)}"
-        f'<p style="margin:0;font-family:{MONO};font-size:11px;color:var(--ink2)">{note}</p>'
         "</div></header>"
     )
 

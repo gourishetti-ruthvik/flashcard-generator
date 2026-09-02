@@ -650,3 +650,17 @@ def test_the_header_wraps_on_a_phone() -> None:
     assert 'class="hd"' in app.header_html(0)
     assert 'class="ration"' in app.header_html(0)
     assert 'class="ticks"' in app.header_html(0)
+
+
+def test_the_header_cluster_wraps_before_it_clips() -> None:
+    """At ~1000px the dark pill was cut off rather than wrapping.
+
+    The page did not scroll, so nothing signalled that a control had gone
+    missing -- it simply was not there.
+    """
+    assert ".hd{flex-wrap:wrap}" in app.CSS
+    # Split on the base rule, not the first ".meta{" -- that one is the mobile
+    # override inside the media query and asserting against it proves nothing.
+    base = app.CSS.split(".meta{display:flex")[1].split("}")[0]
+    assert "flex-wrap:wrap" in base
+    assert "margin-left:auto" in base  # keeps it right-aligned once wrapped
