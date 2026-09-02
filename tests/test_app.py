@@ -688,3 +688,29 @@ def test_preview_refreshes_the_count_too(settings: Settings) -> None:
     client_mod.record_spend(settings, 9)
     _, _, header = app.preview(NOTES, None, 5)
     assert "11</b> of 20 left" in header
+
+
+def test_an_exhausted_ration_gives_advice_that_can_be_taken() -> None:
+    """The old wording said "Lower Max chunks to 0", which is not a thing you
+    can do and would not help if it were."""
+    estimate = app.render_estimate(3, 700, 5, spent=app.DAILY_CAP)
+    assert "Lower Max chunks to 0" not in estimate
+    assert "Preview stays free" in estimate
+    assert "wait" in estimate and "for the reset" in estimate
+
+
+def test_the_button_does_not_offer_to_spend_from_zero(settings: Settings) -> None:
+    from flashcards import client as client_mod
+
+    client_mod.record_spend(settings, app.DAILY_CAP)
+    _, button, _ = app.preview(NOTES, None, 5)
+    assert button["value"] == "Generate · nothing left today"
+    assert "of your 0" not in button["value"]
+
+
+def test_a_run_that_still_fits_keeps_the_actionable_advice(
+    settings: Settings,
+) -> None:
+    # Only the zero case changes; "lower it to N" is real advice when N > 0.
+    estimate = app.render_estimate(9, 2000, 5, spent=17)
+    assert "Lower Max chunks to 3" in estimate

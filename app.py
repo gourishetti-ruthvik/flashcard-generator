@@ -358,12 +358,23 @@ def render_estimate(chunks: int, tokens: int, rpm: int, spent: int) -> str:
         f"{chunks} chunk{'' if chunks == 1 else 's'} &middot; {chunks} "
         f"request{'' if chunks == 1 else 's'} &middot; ~{tokens:,} tokens"
     )
-    verdict = (
-        f"That is {chunks} of the {left} you have left today. About {chunks * 5} cards."
-        if not over
-        else f"That is more than the {left} you have left today. Lower Max chunks to "
-        f"{left} or come back after the reset."
-    )
+    if not over:
+        verdict = (
+            f"That is {chunks} of the {left} you have left today. "
+            f"About {chunks * 5} cards."
+        )
+    elif left:
+        verdict = (
+            f"That is more than the {left} you have left today. Lower Max chunks "
+            f"to {left}, or come back after the reset."
+        )
+    else:
+        # "Lower Max chunks to 0" was the old wording here, which is advice that
+        # cannot be taken and would not help if it could.
+        verdict = (
+            f"Today&rsquo;s twenty are gone. Preview stays free, but generating "
+            f"has to wait {resets_in()} for the reset."
+        )
     wait_line = (
         f" About {waiting}s of the run is waiting on the {rpm}-a-minute limit."
         if waiting
@@ -719,7 +730,11 @@ def preview(notes_text: str, files: list[str] | None, max_chunks: float):
         render_estimate(len(chunks), tokens, settings.requests_per_minute, spent),
         # The cost rides on the button itself, so pressing Generate is a
         # considered act rather than a reflex.
-        gr.update(value=f"Generate · spends {len(chunks)} of your {left}"),
+        gr.update(
+            value=f"Generate · spends {len(chunks)} of your {left}"
+            if left
+            else "Generate · nothing left today"
+        ),
         header_html(spent),
     )
 
