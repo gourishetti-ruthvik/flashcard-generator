@@ -90,7 +90,11 @@ $env:FLASHCARDS_USER="you"; $env:FLASHCARDS_PASSWORD="something-long"
 python app.py
 ```
 
-The app **refuses to open a public link unless both are set**. A share URL is
+The app **refuses to start if it would be reachable beyond localhost** unless
+both are set — that covers a share tunnel *and* binding to `0.0.0.0`, which is
+what LAN access and every hosting platform need. If your home network is
+genuinely trusted and a password on every phone visit is just friction, set
+`FLASHCARDS_ALLOW_OPEN=1` to opt out by name. The default stays closed. A share URL is
 reachable by anyone holding it and guessable enough to be found, and behind it
 sits a key spending a 20-a-day allowance, so an unauthenticated tunnel is not a
 convenience — it is someone else's quota.
@@ -106,6 +110,23 @@ python -c "import socket; s=socket.socket(); s.settimeout(15); s.connect(('gradi
 
 If that times out, the share link cannot work on that network. A different one
 — a phone hotspot, say — may well be fine.
+
+### Deploying it (Render free tier)
+
+`render.yaml` is a blueprint: in Render, **New → Blueprint**, point it at this
+repo, and it creates the service. Then set three variables in the dashboard —
+`GEMINI_API_KEY`, `FLASHCARDS_USER`, `FLASHCARDS_PASSWORD`. They are marked
+`sync: false`, so Render asks for them and stores them itself; none of the three
+is ever in git.
+
+What the free plan costs you, both specific to this app:
+
+- **The disk is wiped on every spin down** (15 minutes idle). That resets the
+  ration counter, so the header says *"spent since restart"* there instead of
+  claiming to know the day's total — the blueprint sets `FLASHCARDS_EPHEMERAL=1`
+  to switch that wording. It also wipes `.llm_cache/`, so notes you have already
+  processed cost quota again.
+- **About a minute to wake up** from idle before the page loads.
 
 ### Why not Hugging Face Spaces
 
@@ -186,7 +207,7 @@ current design, not a set of options.
 pytest
 ```
 
-271 tests, no network calls. The SDK client is stubbed and the embedding encoder
+283 tests, no network calls. The SDK client is stubbed and the embedding encoder
 is faked, so the suite runs offline in about 3 seconds.
 
 ## Benchmark results

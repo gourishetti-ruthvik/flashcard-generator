@@ -20,7 +20,9 @@ dependencies = [
 dedupe = ["sentence-transformers>=3.0"]
 # Only the Gradio front end needs this; the CLI does not.
 app = ["gradio>=6.0"]
-dev = ["pytest>=8.0"]
+# pyyaml only to assert render.yaml keeps its secrets out of git. It arrives
+# transitively via gradio, but a test should not rest on that.
+dev = ["pytest>=8.0", "pyyaml>=6.0"]
 
 [project.scripts]
 flashcards = "flashcards.cli:app"

@@ -1,0 +1,35 @@
+# Render blueprint. Create the service from this file with New > Blueprint,
+# pointing at this repo, then set the three secrets in the dashboard.
+#
+# Nothing secret lives here. `sync: false` means "this service needs the
+# variable, ask me for it in the dashboard" -- Render prompts on first deploy
+# and stores the value itself, so no key ever lands in git.
+services:
+  - type: web
+    name: flashcards
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      # Render routes traffic to $PORT on 0.0.0.0. Binding to loopback would
+      # make the service look permanently unhealthy.
+      - key: GRADIO_SERVER_NAME
+        value: 0.0.0.0
+
+      # The free plan's disk is wiped on every spin down, which happens after
+      # 15 minutes idle. That resets the daily-ration counter, so the header
+      # says "spent since restart" here rather than claiming to know the day's
+      # total. It also resets .llm_cache, so repeated notes cost quota again.
+      - key: FLASHCARDS_EPHEMERAL
+        value: "1"
+
+      # Set these three in the dashboard. The app refuses to start without the
+      # user and password, because a public URL with no login is an open tap
+      # on a 20-request-a-day allowance.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FLASHCARDS_USER
+        sync: false
+      - key: FLASHCARDS_PASSWORD
+        sync: false

@@ -731,8 +731,47 @@ def test_port_is_honoured_when_set() -> None:
 def test_sharing_without_a_password_is_refused() -> None:
     """A share URL is reachable by anyone holding it and guessable enough to
     be found, and behind it sits a key spending a 20-a-day allowance."""
-    with pytest.raises(SystemExit, match="public link with no password"):
+    with pytest.raises(SystemExit, match="reachable beyond localhost"):
         app.launch_kwargs({"GRADIO_SHARE": "True"})
+
+
+@pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.4", "::"])
+def test_binding_beyond_localhost_is_refused_too(host: str) -> None:
+    """The gap this closes: the guard only knew about share tunnels.
+
+    Binding to 0.0.0.0 is what LAN access and every hosting platform need, so
+    a deployment would have gone up publicly with no password at all.
+    """
+    with pytest.raises(SystemExit, match="reachable beyond localhost"):
+        app.launch_kwargs({"GRADIO_SERVER_NAME": host})
+
+
+@pytest.mark.parametrize("host", ["", "127.0.0.1", "localhost", "::1"])
+def test_loopback_needs_no_password(host: str) -> None:
+    assert "auth" not in app.launch_kwargs({"GRADIO_SERVER_NAME": host})
+
+
+def test_a_public_bind_with_a_password_is_allowed() -> None:
+    kwargs = app.launch_kwargs(
+        {
+            "GRADIO_SERVER_NAME": "0.0.0.0",
+            "PORT": "10000",
+            "FLASHCARDS_USER": "me",
+            "FLASHCARDS_PASSWORD": "pw",
+        }
+    )
+    assert kwargs["auth"] == ("me", "pw")
+    assert kwargs["server_port"] == 10000
+    assert "share" not in kwargs  # a bound host is not a tunnel
+
+
+def test_the_open_escape_hatch_must_be_asked_for_by_name() -> None:
+    # Deliberate, for a trusted home network. The default stays closed.
+    env = {"GRADIO_SERVER_NAME": "0.0.0.0"}
+    with pytest.raises(SystemExit):
+        app.launch_kwargs(env)
+    kwargs = app.launch_kwargs({**env, "FLASHCARDS_ALLOW_OPEN": "1"})
+    assert "auth" not in kwargs
 
 
 @pytest.mark.parametrize("half", [{"FLASHCARDS_USER": "me"},
@@ -755,3 +794,42 @@ def test_no_password_is_baked_into_the_repo() -> None:
     source = Path(app.__file__).read_text(encoding="utf-8")
     assert "FLASHCARDS_PASSWORD" in source
     assert 'auth=("' not in source
+
+
+def test_the_counter_admits_when_the_disk_is_ephemeral() -> None:
+    """Free hosting wipes the disk on every spin down.
+
+    The count is then real but no longer means "spent today", and a strip
+    quietly claiming "20 of 20 left" against a spent quota is worse than one
+    that says what it actually knows.
+    """
+    assert app.counter_is_ephemeral({"FLASHCARDS_EPHEMERAL": "1"})
+    assert not app.counter_is_ephemeral({})
+
+
+def test_render_blueprint_keeps_every_secret_out_of_git() -> None:
+    import yaml
+
+    blueprint = yaml.safe_load(Path("render.yaml").read_text(encoding="utf-8"))
+    env = {v["key"]: v for v in blueprint["services"][0]["envVars"]}
+    for secret in ("GEMINI_API_KEY", "FLASHCARDS_USER", "FLASHCARDS_PASSWORD"):
+        assert env[secret].get("sync") is False, f"{secret} must be dashboard-only"
+        assert "value" not in env[secret], f"{secret} must not carry a value"
+    # Render routes to $PORT on 0.0.0.0; loopback would read as unhealthy.
+    assert env["GRADIO_SERVER_NAME"]["value"] == "0.0.0.0"
+    assert env["FLASHCARDS_EPHEMERAL"]["value"] == "1"
+
+
+def test_the_blueprint_start_command_would_demand_a_password() -> None:
+    # The blueprint binds 0.0.0.0, so launch_kwargs must refuse without auth.
+    # This is the check that would have caught the gap before deploying.
+    import yaml
+
+    blueprint = yaml.safe_load(Path("render.yaml").read_text(encoding="utf-8"))
+    env = {
+        v["key"]: v.get("value", "")
+        for v in blueprint["services"][0]["envVars"]
+        if "value" in v
+    }
+    with pytest.raises(SystemExit, match="reachable beyond localhost"):
+        app.launch_kwargs(env)

@@ -46,6 +46,8 @@ from flashcards.client import (
 from flashcards.config import ConfigError, Settings, load_settings
 from flashcards.models import Chunk, SourcedCard
 
+TRUTHY = {"1", "true", "yes", "on"}
+
 # --- design tokens ---------------------------------------------------------
 
 # Every ratio was measured against the surface it actually sits on, not
@@ -282,7 +284,25 @@ def ticks_html(spent: int, cap: int = DAILY_CAP) -> str:
     )
 
 
+def counter_is_ephemeral(env: dict[str, str] | None = None) -> bool:
+    """Does the filesystem holding the count get wiped out from under us?
+
+    Free hosting tiers have ephemeral disks, so the count resets on every spin
+    down. The number is then real but no longer means "spent today", and a
+    strip that quietly says "20 of 20 left" against a spent quota is worse
+    than one that admits what it knows.
+    """
+    source = os.environ if env is None else env
+    return source.get("FLASHCARDS_EPHEMERAL", "").lower() in TRUTHY
+
+
 def header_html(spent: int) -> str:
+    if counter_is_ephemeral():
+        note = (
+            f'<b style="color:var(--ink);font-weight:600">{spent}</b> spent since '
+            f"restart &middot; day resets in {resets_in()}"
+        )
+        return _header_shell(spent, note)
     left = max(0, DAILY_CAP - spent)
     note = (
         f'<b style="color:var(--ink);font-weight:600">{left}</b> of {DAILY_CAP} left '
@@ -291,6 +311,10 @@ def header_html(spent: int) -> str:
         else f"<b style=\"color:var(--oranget);font-weight:600\">none left</b> "
         f"&middot; resets in {resets_in()}"
     )
+    return _header_shell(spent, note)
+
+
+def _header_shell(spent: int, note: str) -> str:
     return (
         # No "auto" radio: the absence of a choice is auto. A third radio
         # carrying `checked` relies on that attribute surviving Gradio's
@@ -951,9 +975,6 @@ with gr.Blocks(title="Flashcards") as demo:
     )
 
 
-TRUTHY = {"1", "true", "yes", "on"}
-
-
 def share_auth(env: dict[str, str]) -> tuple[str, str] | None:
     """Credentials for a public link, from the environment or not at all.
 
@@ -967,12 +988,27 @@ def share_auth(env: dict[str, str]) -> tuple[str, str] | None:
     return (user, password) if user and password else None
 
 
-def launch_kwargs(env: dict[str, str]) -> dict:
-    """Refuse to open a public link without a password.
+LOOPBACK = {"", "127.0.0.1", "localhost", "::1"}
 
-    A share URL is reachable by anyone who has it and is guessable enough to
-    be found. Behind it sits a key that spends a 20-a-day allowance, so an
-    unauthenticated tunnel is not a convenience, it is someone else's quota.
+
+def is_exposed(env: dict[str, str]) -> bool:
+    """Is the app reachable by anyone other than this machine?
+
+    Two ways, and the first version only knew about one. A share tunnel is
+    obvious. Binding to 0.0.0.0 is the quiet one -- it is what LAN access and
+    every hosting platform need, so a guard that only fired on GRADIO_SHARE
+    would have let a public deployment go up with no password at all.
+    """
+    if env.get("GRADIO_SHARE", "").lower() in TRUTHY:
+        return True
+    return env.get("GRADIO_SERVER_NAME", "").strip() not in LOOPBACK
+
+
+def launch_kwargs(env: dict[str, str]) -> dict:
+    """Refuse to expose the app without a password.
+
+    Behind this page sits a key that spends a 20-a-day allowance. An open URL
+    is not a convenience, it is someone else's quota.
     """
     kwargs: dict = {"css": CSS}
     port = env.get("PORT")
@@ -981,17 +1017,25 @@ def launch_kwargs(env: dict[str, str]) -> dict:
         # GRADIO_SERVER_PORT.
         kwargs["server_port"] = int(port)
 
-    if env.get("GRADIO_SHARE", "").lower() not in TRUTHY:
+    if env.get("GRADIO_SHARE", "").lower() in TRUTHY:
+        kwargs["share"] = True
+
+    if not is_exposed(env):
         return kwargs
 
     auth = share_auth(env)
     if auth is None:
+        if env.get("FLASHCARDS_ALLOW_OPEN", "").lower() in TRUTHY:
+            # Deliberate escape hatch for a trusted home network, where a
+            # password on every phone visit is friction for no real gain. It
+            # has to be asked for by name; the default stays closed.
+            return kwargs
         raise SystemExit(
-            "GRADIO_SHARE is on but FLASHCARDS_USER and FLASHCARDS_PASSWORD are "
-            "not both set.\nA public link with no password lets anyone spend "
-            "your daily quota. Set them and try again."
+            "This would be reachable beyond localhost, but FLASHCARDS_USER and "
+            "FLASHCARDS_PASSWORD are not both set.\n"
+            "Anyone who reaches it spends your daily quota. Either set them, or "
+            "set FLASHCARDS_ALLOW_OPEN=1 if the network is genuinely trusted."
         )
-    kwargs["share"] = True
     kwargs["auth"] = auth
     return kwargs
 
